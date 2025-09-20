@@ -156,6 +156,17 @@ OPENAI_API_KEY="your_openai_api_key_here"
 REACT_APP_BACKEND_URL=http://localhost:8001
 ```
 
+## Deployment Architecture
+
+- **Frontend**: Deployed on Netlify (React SPA)
+- **Backend**: Deployed on Render (FastAPI + Python)
+- **Database**: MongoDB (optional - app runs in demo mode without it)
+
+### Netlify Configuration
+- Build command: `yarn install && yarn build`
+- Publish directory: `frontend/build`
+- Environment variable: `REACT_APP_BACKEND_URL` = Your Render backend URL
+
 ## Contributing
 
 1. Fork the repository
