@@ -1,6 +1,6 @@
 [build]
   base = "frontend"
-  command = "yarn install --no-frozen-lockfile && yarn build"
+  command = "yarn config set network-timeout 600000 && yarn install --no-frozen-lockfile --network-timeout 600000 || yarn install --no-frozen-lockfile --network-timeout 600000 && yarn build"
   publish = "build"
 
 [build.environment]
