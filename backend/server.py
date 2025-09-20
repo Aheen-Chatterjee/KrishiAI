@@ -21,15 +21,10 @@ from openai import AsyncOpenAI
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
-# MongoDB connection
-mongo_url = os.environ.get('MONGO_URL')
-if mongo_url:
-    client = AsyncIOMotorClient(mongo_url)
-    db = client[os.environ.get('DB_NAME', 'farmwise_db')]
-else:
-    client = None
-    db = None
-    logging.warning("MongoDB not configured - some features will be disabled")
+# MongoDB connection - will be initialized on startup
+client = None
+db = None
+mongo_url = None
 
 # Create the main app without a prefix
 app = FastAPI()
@@ -42,7 +37,11 @@ OPENWEATHER_API_KEY = "your_openweather_key_here"  # You'll need to get this
 OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
 
 # Initialize OpenAI client
-openai_client = AsyncOpenAI(api_key=OPENAI_API_KEY)
+if OPENAI_API_KEY:
+    openai_client = AsyncOpenAI(api_key=OPENAI_API_KEY)
+else:
+    openai_client = None
+    logging.warning("OpenAI API key not configured - AI features will be disabled")
 
 # Models
 class User(BaseModel):
@@ -128,6 +127,12 @@ def parse_from_mongo(item):
                     pass
     return item
 
+def check_database_availability():
+    """Check if database is available and return error response if not"""
+    if not db:
+        raise HTTPException(status_code=503, detail="Database not available")
+    return True
+
 async def get_weather_data(lat: float, lon: float):
     """Get weather data from OpenWeatherMap"""
     try:
@@ -145,6 +150,9 @@ async def get_weather_data(lat: float, lon: float):
 
 async def get_ai_advice(crop_name: str, location: dict, weather_data: dict = None):
     """Get AI-powered agricultural advice"""
+    if not openai_client:
+        return "AI features are currently unavailable. Please configure the OpenAI API key."
+
     try:
         weather_context = ""
         if weather_data:
@@ -182,6 +190,9 @@ Keep advice practical and focused on Kerala farming conditions."""
 
 async def identify_crop_from_image(image_base64: str):
     """Identify crop from image using OpenAI Vision"""
+    if not openai_client:
+        return "AI features are currently unavailable. Please configure the OpenAI API key."
+
     try:
         response = await openai_client.chat.completions.create(
             model="gpt-4o",
@@ -219,8 +230,7 @@ async def identify_crop_from_image(image_base64: str):
 # User Management
 @api_router.post("/users", response_model=User)
 async def create_user(user_data: UserCreate):
-    if not db:
-        raise HTTPException(status_code=503, detail="Database not available")
+    check_database_availability()
     user_dict = user_data.dict()
     user_obj = User(**user_dict)
     user_dict = prepare_for_mongo(user_obj.dict())
@@ -229,6 +239,7 @@ async def create_user(user_data: UserCreate):
 
 @api_router.get("/users/{user_id}", response_model=User)
 async def get_user(user_id: str):
+    check_database_availability()
     user = await db.users.find_one({"id": user_id})
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -236,23 +247,25 @@ async def get_user(user_id: str):
 
 @api_router.put("/users/{user_id}", response_model=User)
 async def update_user(user_id: str, user_data: dict):
+    check_database_availability()
     user_data['updated_at'] = datetime.now(timezone.utc).isoformat()
     user_data = prepare_for_mongo(user_data)
     result = await db.users.update_one({"id": user_id}, {"$set": user_data})
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="User not found")
-    
+
     updated_user = await db.users.find_one({"id": user_id})
     return User(**parse_from_mongo(updated_user))
 
 # Crop Management
 @api_router.post("/crops", response_model=Crop)
 async def create_crop(crop_data: dict):
+    check_database_availability()
     # Extract user_id from the request data
     user_id = crop_data.pop('user_id', None)
     if not user_id:
         raise HTTPException(status_code=400, detail="user_id is required")
-    
+
     crop_dict = crop_data.copy()
     crop_dict['user_id'] = user_id
     crop_obj = Crop(**crop_dict)
@@ -262,11 +275,13 @@ async def create_crop(crop_data: dict):
 
 @api_router.get("/crops/{user_id}", response_model=List[Crop])
 async def get_user_crops(user_id: str):
+    check_database_availability()
     crops = await db.crops.find({"user_id": user_id}).to_list(length=None)
     return [Crop(**parse_from_mongo(crop)) for crop in crops]
 
 @api_router.get("/crop/{crop_id}", response_model=Crop)
 async def get_crop(crop_id: str):
+    check_database_availability()
     crop = await db.crops.find_one({"id": crop_id})
     if not crop:
         raise HTTPException(status_code=404, detail="Crop not found")
@@ -274,80 +289,94 @@ async def get_crop(crop_id: str):
 
 @api_router.put("/crop/{crop_id}", response_model=Crop)
 async def update_crop(crop_id: str, crop_data: dict):
+    check_database_availability()
     crop_data['updated_at'] = datetime.now(timezone.utc).isoformat()
     crop_data = prepare_for_mongo(crop_data)
     result = await db.crops.update_one({"id": crop_id}, {"$set": crop_data})
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Crop not found")
-    
+
     updated_crop = await db.crops.find_one({"id": crop_id})
     return Crop(**parse_from_mongo(updated_crop))
 
 @api_router.delete("/crop/{crop_id}")
 async def delete_crop(crop_id: str):
+    check_database_availability()
     result = await db.crops.delete_one({"id": crop_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Crop not found")
-    
+
     # Also delete related activities
     await db.activities.delete_many({"crop_id": crop_id})
     await db.ai_advice.delete_many({"crop_id": crop_id})
-    
+
     return {"message": "Crop deleted successfully"}
 
 # Activity Management
 @api_router.post("/activities", response_model=Activity)
 async def create_activity(activity_data: ActivityCreate):
+    check_database_availability()
     activity_dict = activity_data.dict()
     activity_obj = Activity(**activity_dict)
     activity_dict = prepare_for_mongo(activity_obj.dict())
     await db.activities.insert_one(activity_dict)
-    
+
     # Update crop's last activity
     await db.crops.update_one(
         {"id": activity_data.crop_id},
         {"$set": {"last_activity": datetime.now(timezone.utc).isoformat()}}
     )
-    
+
     return activity_obj
 
 @api_router.get("/activities/{crop_id}", response_model=List[Activity])
 async def get_crop_activities(crop_id: str):
+    check_database_availability()
     activities = await db.activities.find({"crop_id": crop_id}).sort("date", -1).to_list(length=None)
     return [Activity(**parse_from_mongo(activity)) for activity in activities]
 
 # AI Features
 @api_router.post("/ai/advice/{crop_id}")
 async def get_crop_advice(crop_id: str):
+    # Get AI advice even without database - use default crop info
+    if not db:
+        # Provide advice with generic crop information
+        advice_text = await get_ai_advice("crop", {}, None)
+        return {"advice": advice_text, "weather": None, "note": "Database not available - using generic advice"}
+
     crop = await db.crops.find_one({"id": crop_id})
     if not crop:
         raise HTTPException(status_code=404, detail="Crop not found")
-    
+
     user = await db.users.find_one({"id": crop["user_id"]})
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    
+
     # Get weather data if location available
     weather_data = None
     if user.get("location", {}).get("coordinates"):
         coords = user["location"]["coordinates"]
         weather_data = await get_weather_data(coords[1], coords[0])  # lat, lon
-    
+
     advice_text = await get_ai_advice(crop["name"], user.get("location", {}), weather_data)
-    
-    # Save advice to database
-    advice_obj = AIAdvice(
-        crop_id=crop_id,
-        advice_text=advice_text,
-        weather_data=weather_data or {}
-    )
-    advice_dict = prepare_for_mongo(advice_obj.dict())
-    await db.ai_advice.insert_one(advice_dict)
-    
+
+    # Save advice to database if available
+    if db:
+        advice_obj = AIAdvice(
+            crop_id=crop_id,
+            advice_text=advice_text,
+            weather_data=weather_data or {}
+        )
+        advice_dict = prepare_for_mongo(advice_obj.dict())
+        await db.ai_advice.insert_one(advice_dict)
+
     return {"advice": advice_text, "weather": weather_data}
 
 @api_router.post("/ai/identify-crop")
 async def identify_crop(image: UploadFile = File(...)):
+    if not openai_client:
+        raise HTTPException(status_code=503, detail="AI features are currently unavailable. Please configure the OpenAI API key.")
+
     try:
         # Read and convert image to base64
         image_data = await image.read()
@@ -363,24 +392,27 @@ async def identify_crop(image: UploadFile = File(...)):
 
 @api_router.post("/ai/chat")
 async def chat_with_ai(chat_data: ChatMessage):
+    if not openai_client:
+        raise HTTPException(status_code=503, detail="AI features are currently unavailable. Please configure the OpenAI API key.")
+
     try:
-        # Get crop context if provided
+        # Get crop context if provided and database is available
         crop_context = ""
-        if chat_data.crop_id:
+        if chat_data.crop_id and db:
             crop = await db.crops.find_one({"id": chat_data.crop_id})
             if crop:
                 crop_context = f"The farmer is asking about their {crop['name']} crop, planted on {crop.get('planting_date', 'unknown date')}, current stage: {crop.get('current_stage', 'unknown')}."
 
         # Prepare message
         message_text = f"{crop_context}\n\nFarmer's question: {chat_data.message}"
-        
+
         messages = [
             {
                 "role": "system",
                 "content": "You are FarmWise AI, an expert agricultural assistant for Kerala farmers. Provide helpful, practical advice in a friendly, conversational manner."
             }
         ]
-        
+
         if chat_data.image_base64:
             messages.append({
                 "role": "user",
@@ -402,16 +434,16 @@ async def chat_with_ai(chat_data: ChatMessage):
                 "role": "user",
                 "content": message_text
             })
-        
+
         response = await openai_client.chat.completions.create(
             model="gpt-4o",
             messages=messages,
             max_tokens=800,
             temperature=0.7
         )
-        
+
         return {"response": response.choices[0].message.content}
-        
+
     except Exception as e:
         logging.error(f"AI chat error: {e}")
         raise HTTPException(status_code=500, detail="Error processing chat message")
@@ -432,10 +464,41 @@ async def root():
 @api_router.get("/health")
 async def health_check():
     return {
-        "status": "healthy", 
+        "status": "healthy",
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "mongodb": "connected" if db else "not configured"
+        "mongodb": "connected" if db else "not configured",
+        "openai": "available" if openai_client else "not configured"
     }
+
+@api_router.get("/demo")
+async def demo_data():
+    """Provide demo/sample data when database is not available"""
+    if db:
+        return {"message": "Database is available - use regular endpoints"}
+
+    demo_response = {
+        "demo_mode": True,
+        "message": "Database not available - running in demo mode",
+        "sample_user": {
+            "id": "demo-user-123",
+            "name": "Demo Farmer",
+            "location": {"district": "Kerala", "taluk": "Demo Taluk"},
+            "crops": ["Rice", "Coconut", "Banana"]
+        },
+        "sample_crop": {
+            "id": "demo-crop-456",
+            "name": "Rice",
+            "current_stage": "vegetative",
+            "health_status": "good"
+        },
+        "available_endpoints": [
+            "/weather/{lat}/{lon}",
+            "/ai/identify-crop (with image)",
+            "/ai/chat",
+            "/ai/advice/{crop_id} (with generic advice)"
+        ]
+    }
+    return demo_response
 
 # Include the router in the main app
 app.include_router(api_router)
@@ -455,6 +518,28 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+@app.on_event("startup")
+async def startup_db_client():
+    """Initialize MongoDB connection on application startup"""
+    global client, db, mongo_url
+
+    mongo_url = os.environ.get('MONGO_URL')
+    if mongo_url:
+        try:
+            client = AsyncIOMotorClient(mongo_url)
+            # Test the connection by pinging the server
+            await client.admin.command('ping')
+            db = client[os.environ.get('DB_NAME', 'farmwise_db')]
+            logging.info("Successfully connected to MongoDB")
+        except Exception as e:
+            logging.error(f"Failed to connect to MongoDB: {e}")
+            client = None
+            db = None
+            logging.warning("MongoDB not available - some features will be disabled")
+    else:
+        logging.warning("MONGO_URL not configured - MongoDB features will be disabled")
+
 @app.on_event("shutdown")
 async def shutdown_db_client():
-    client.close()
+    if client:
+        client.close()

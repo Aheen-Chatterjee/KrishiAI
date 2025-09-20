@@ -7,10 +7,10 @@ services:
     startCommand: cd backend && uvicorn server:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: MONGO_URL
-        sync: false
+        sync: false # Set this to your MongoDB Atlas connection string
       - key: DB_NAME
         value: farmwise_db
       - key: CORS_ORIGINS
-        sync: false
+        value: "*" # Update this to your frontend domain(s) for production
       - key: OPENAI_API_KEY
-        sync: false
+        sync: false # Set this to your OpenAI API key
