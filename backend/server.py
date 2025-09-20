@@ -15,7 +15,7 @@ import base64
 import requests
 from PIL import Image
 import io
-from emergentintegrations.llm.chat import LlmChat, UserMessage, ImageContent
+from openai import AsyncOpenAI
 
 
 ROOT_DIR = Path(__file__).parent
@@ -35,6 +35,9 @@ api_router = APIRouter(prefix="/api")
 # OpenWeather API
 OPENWEATHER_API_KEY = "your_openweather_key_here"  # You'll need to get this
 OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
+
+# Initialize OpenAI client
+openai_client = AsyncOpenAI(api_key=OPENAI_API_KEY)
 
 # Models
 class User(BaseModel):
@@ -138,12 +141,6 @@ async def get_weather_data(lat: float, lon: float):
 async def get_ai_advice(crop_name: str, location: dict, weather_data: dict = None):
     """Get AI-powered agricultural advice"""
     try:
-        chat = LlmChat(
-            api_key=OPENAI_API_KEY,
-            session_id=f"advice_{uuid.uuid4()}",
-            system_message="You are an expert agricultural advisor specializing in Kerala, India farming practices. Provide practical, actionable advice for farmers."
-        ).with_model("openai", "gpt-4o")
-
         weather_context = ""
         if weather_data:
             weather_context = f"Current weather: {weather_data.get('weather', [{}])[0].get('description', 'N/A')}, Temperature: {weather_data.get('main', {}).get('temp', 'N/A')}°C, Humidity: {weather_data.get('main', {}).get('humidity', 'N/A')}%"
@@ -163,9 +160,17 @@ Please provide:
 
 Keep advice practical and focused on Kerala farming conditions."""
 
-        user_message = UserMessage(text=prompt)
-        response = await chat.send_message(user_message)
-        return response
+        response = await openai_client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": "You are an expert agricultural advisor specializing in Kerala, India farming practices. Provide practical, actionable advice for farmers."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=1000,
+            temperature=0.7
+        )
+        
+        return response.choices[0].message.content
     except Exception as e:
         logging.error(f"AI advice error: {e}")
         return "Unable to generate AI advice at this time. Please consult with local agricultural experts."
@@ -173,21 +178,33 @@ Keep advice practical and focused on Kerala farming conditions."""
 async def identify_crop_from_image(image_base64: str):
     """Identify crop from image using OpenAI Vision"""
     try:
-        chat = LlmChat(
-            api_key=OPENAI_API_KEY,
-            session_id=f"crop_id_{uuid.uuid4()}",
-            system_message="You are an expert in crop identification, especially for Kerala, India agriculture. Identify crops accurately from images."
-        ).with_model("openai", "gpt-4o")
-
-        image_content = ImageContent(image_base64=image_base64)
-        
-        user_message = UserMessage(
-            text="Please identify this crop. If it's a crop commonly grown in Kerala, India, provide the name and brief growing information. If uncertain, provide your best guess with confidence level.",
-            file_contents=[image_content]
+        response = await openai_client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are an expert in crop identification, especially for Kerala, India agriculture. Identify crops accurately from images."
+                },
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": "Please identify this crop. If it's a crop commonly grown in Kerala, India, provide the name and brief growing information. If uncertain, provide your best guess with confidence level."
+                        },
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/jpeg;base64,{image_base64}"
+                            }
+                        }
+                    ]
+                }
+            ],
+            max_tokens=500
         )
         
-        response = await chat.send_message(user_message)
-        return response
+        return response.choices[0].message.content
     except Exception as e:
         logging.error(f"Crop identification error: {e}")
         return "Unable to identify crop from image."
@@ -340,12 +357,6 @@ async def identify_crop(image: UploadFile = File(...)):
 @api_router.post("/ai/chat")
 async def chat_with_ai(chat_data: ChatMessage):
     try:
-        chat = LlmChat(
-            api_key=OPENAI_API_KEY,
-            session_id=f"chat_{uuid.uuid4()}",
-            system_message="You are FarmWise AI, an expert agricultural assistant for Kerala farmers. Provide helpful, practical advice in a friendly, conversational manner."
-        ).with_model("openai", "gpt-4o")
-
         # Get crop context if provided
         crop_context = ""
         if chat_data.crop_id:
@@ -354,20 +365,45 @@ async def chat_with_ai(chat_data: ChatMessage):
                 crop_context = f"The farmer is asking about their {crop['name']} crop, planted on {crop.get('planting_date', 'unknown date')}, current stage: {crop.get('current_stage', 'unknown')}."
 
         # Prepare message
-        messages = []
         message_text = f"{crop_context}\n\nFarmer's question: {chat_data.message}"
         
-        if chat_data.image_base64:
-            image_content = ImageContent(image_base64=chat_data.image_base64)
-            user_message = UserMessage(
-                text=message_text,
-                file_contents=[image_content]
-            )
-        else:
-            user_message = UserMessage(text=message_text)
+        messages = [
+            {
+                "role": "system",
+                "content": "You are FarmWise AI, an expert agricultural assistant for Kerala farmers. Provide helpful, practical advice in a friendly, conversational manner."
+            }
+        ]
         
-        response = await chat.send_message(user_message)
-        return {"response": response}
+        if chat_data.image_base64:
+            messages.append({
+                "role": "user",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": message_text
+                    },
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:image/jpeg;base64,{chat_data.image_base64}"
+                        }
+                    }
+                ]
+            })
+        else:
+            messages.append({
+                "role": "user",
+                "content": message_text
+            })
+        
+        response = await openai_client.chat.completions.create(
+            model="gpt-4o",
+            messages=messages,
+            max_tokens=800,
+            temperature=0.7
+        )
+        
+        return {"response": response.choices[0].message.content}
         
     except Exception as e:
         logging.error(f"AI chat error: {e}")
