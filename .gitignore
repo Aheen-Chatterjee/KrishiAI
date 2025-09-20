@@ -83,3 +83,7 @@ backend/.env
 frontend/.env
 !backend/.env.example
 !frontend/.env.example
+-e 
+# Environment files
+*.env
+*.env.*
