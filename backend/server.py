@@ -22,9 +22,14 @@ ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
 # MongoDB connection
-mongo_url = os.environ['MONGO_URL']
-client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ['DB_NAME']]
+mongo_url = os.environ.get('MONGO_URL')
+if mongo_url:
+    client = AsyncIOMotorClient(mongo_url)
+    db = client[os.environ.get('DB_NAME', 'farmwise_db')]
+else:
+    client = None
+    db = None
+    logging.warning("MongoDB not configured - some features will be disabled")
 
 # Create the main app without a prefix
 app = FastAPI()
@@ -214,6 +219,8 @@ async def identify_crop_from_image(image_base64: str):
 # User Management
 @api_router.post("/users", response_model=User)
 async def create_user(user_data: UserCreate):
+    if not db:
+        raise HTTPException(status_code=503, detail="Database not available")
     user_dict = user_data.dict()
     user_obj = User(**user_dict)
     user_dict = prepare_for_mongo(user_obj.dict())
@@ -420,11 +427,15 @@ async def get_weather(lat: float, lon: float):
 # Health check
 @api_router.get("/")
 async def root():
-    return {"message": "FarmWise API is running"}
+    return {"message": "FarmWise API is running", "mongodb": "connected" if db else "not configured"}
 
 @api_router.get("/health")
 async def health_check():
-    return {"status": "healthy", "timestamp": datetime.now(timezone.utc).isoformat()}
+    return {
+        "status": "healthy", 
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "mongodb": "connected" if db else "not configured"
+    }
 
 # Include the router in the main app
 app.include_router(api_router)
