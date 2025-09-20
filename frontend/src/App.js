@@ -843,6 +843,8 @@ function ChatInterface() {
   const [messages, setMessages] = useState([]);
   const [inputMessage, setInputMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [selectedImage, setSelectedImage] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState(null);
 
   const crop = crops.find(c => c.id === cropId);
 
@@ -856,31 +858,83 @@ function ChatInterface() {
     }]);
   }, [crop]);
 
+  const handleImageSelect = (event) => {
+    const file = event.target.files[0];
+    if (file && file.type.startsWith('image/')) {
+      setSelectedImage(file);
+      const url = URL.createObjectURL(file);
+      setPreviewUrl(url);
+    }
+  };
+
+  const removeImage = () => {
+    setSelectedImage(null);
+    setPreviewUrl(null);
+  };
+
   const sendMessage = async () => {
-    if (!inputMessage.trim()) return;
+    if (!inputMessage.trim() && !selectedImage) return;
 
     const userMessage = {
       id: Date.now().toString(),
       text: inputMessage,
       isBot: false,
-      timestamp: new Date()
+      timestamp: new Date(),
+      image: selectedImage ? previewUrl : null
     };
 
     setMessages(prev => [...prev, userMessage]);
     setInputMessage("");
     setIsLoading(true);
 
-    // Simulate AI response
-    setTimeout(() => {
+    try {
+      let imageBase64 = null;
+      if (selectedImage) {
+        const reader = new FileReader();
+        imageBase64 = await new Promise((resolve) => {
+          reader.onload = () => resolve(reader.result.split(',')[1]);
+          reader.readAsDataURL(selectedImage);
+        });
+      }
+
+      const response = await fetch(`${API}/ai/chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          message: inputMessage,
+          crop_id: cropId,
+          image_base64: imageBase64
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const botResponse = {
+          id: (Date.now() + 1).toString(),
+          text: data.response,
+          isBot: true,
+          timestamp: new Date()
+        };
+        setMessages(prev => [...prev, botResponse]);
+      } else {
+        throw new Error('Failed to get response');
+      }
+    } catch (error) {
+      console.error('Chat error:', error);
       const botResponse = {
         id: (Date.now() + 1).toString(),
-        text: `Based on your question about ${crop?.name || 'your crop'}, here's my advice: This is a great question! For Kerala farming conditions, I recommend monitoring the weather patterns and adjusting your irrigation accordingly. Would you like more specific guidance on any particular aspect?`,
+        text: "Sorry, I'm having trouble connecting. Please try again later.",
         isBot: true,
         timestamp: new Date()
       };
       setMessages(prev => [...prev, botResponse]);
+    } finally {
       setIsLoading(false);
-    }, 1500);
+      setSelectedImage(null);
+      setPreviewUrl(null);
+    }
   };
 
   return (
@@ -922,6 +976,15 @@ function ChatInterface() {
                     : 'bg-green-600 text-white'
                 }`}
               >
+                {message.image && (
+                  <div className="mb-2">
+                    <img
+                      src={message.image}
+                      alt="Uploaded"
+                      className="w-32 h-32 object-cover rounded-lg"
+                    />
+                  </div>
+                )}
                 <div className="text-sm">{message.text}</div>
                 <div
                   className={`text-xs mt-1 ${
@@ -951,12 +1014,47 @@ function ChatInterface() {
         </div>
       </ScrollArea>
 
+      {/* Image Preview */}
+      {previewUrl && (
+        <div className="bg-white border-t p-4">
+          <div className="container mx-auto max-w-md">
+            <div className="flex items-center space-x-2">
+              <img
+                src={previewUrl}
+                alt="Preview"
+                className="w-16 h-16 object-cover rounded-lg"
+              />
+              <div className="flex-1">
+                <p className="text-sm text-gray-600">Image ready to send</p>
+                <p className="text-xs text-gray-500">Tap send to include with your message</p>
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={removeImage}
+              >
+                Remove
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Input */}
       <div className="bg-white border-t p-4">
         <div className="container mx-auto max-w-md">
           <div className="flex space-x-2">
-            <Button variant="outline" size="sm" className="flex-shrink-0">
-              <Camera className="w-4 h-4" />
+            <input
+              type="file"
+              accept="image/*"
+              onChange={handleImageSelect}
+              className="hidden"
+              id="chat-image-upload"
+            />
+            <Button variant="outline" size="sm" className="flex-shrink-0" asChild>
+              <label htmlFor="chat-image-upload" className="cursor-pointer">
+                <Camera className="w-4 h-4" />
+              </label>
             </Button>
             <Input
               placeholder="Ask about your crops..."
@@ -968,13 +1066,220 @@ function ChatInterface() {
             <Button 
               size="sm" 
               onClick={sendMessage}
-              disabled={!inputMessage.trim() || isLoading}
+              disabled={(!inputMessage.trim() && !selectedImage) || isLoading}
               className="bg-green-600 hover:bg-green-700"
             >
               Send
             </Button>
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// Camera Page Component
+function CameraPage() {
+  const navigate = useNavigate();
+  const { cropId } = useParams();
+  const { crops, setCrops } = useContext(AppContext);
+  const [selectedImage, setSelectedImage] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [cropIdentification, setCropIdentification] = useState(null);
+
+  const crop = crops.find(c => c.id === cropId);
+
+  const handleImageSelect = (event) => {
+    const file = event.target.files[0];
+    if (file && file.type.startsWith('image/')) {
+      setSelectedImage(file);
+      const url = URL.createObjectURL(file);
+      setPreviewUrl(url);
+    }
+  };
+
+  const handleUpload = async () => {
+    if (!selectedImage) return;
+
+    setIsUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', selectedImage);
+
+      const response = await fetch(`${API}/upload-and-identify-crop`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        setCropIdentification(result.crop_identification);
+        
+        // Update crop with new image
+        if (crop) {
+          const updatedCrops = crops.map(c => 
+            c.id === cropId ? { ...c, image_url: result.image_url } : c
+          );
+          setCrops(updatedCrops);
+        }
+        
+        toast.success("Image uploaded successfully!");
+      } else {
+        throw new Error('Upload failed');
+      }
+    } catch (error) {
+      console.error('Upload error:', error);
+      toast.error("Failed to upload image. Please try again.");
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleRetake = () => {
+    setSelectedImage(null);
+    setPreviewUrl(null);
+    setCropIdentification(null);
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <div className="bg-white shadow-sm border-b">
+        <div className="container mx-auto px-4 py-4 max-w-md">
+          <div className="flex items-center space-x-4">
+            <Button variant="ghost" size="sm" onClick={() => navigate(`/crop/${cropId}`)}>
+              <ArrowLeft className="w-5 h-5" />
+            </Button>
+            <h1 className="text-xl font-bold text-green-800">Update Photo</h1>
+          </div>
+        </div>
+      </div>
+
+      <div className="container mx-auto px-4 py-4 max-w-md space-y-4">
+        {/* Current Crop Info */}
+        {crop && (
+          <Card className="border-green-200">
+            <CardContent className="p-4">
+              <div className="flex items-center space-x-3">
+                <img
+                  src={crop.image_url}
+                  alt={crop.name}
+                  className="w-16 h-16 object-cover rounded-lg"
+                />
+                <div>
+                  <h3 className="font-semibold text-green-800">{crop.name}</h3>
+                  <p className="text-sm text-gray-600">Current photo</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Image Upload Area */}
+        <Card className="border-green-200">
+          <CardContent className="p-4">
+            {!selectedImage ? (
+              <div className="text-center">
+                <div className="w-24 h-24 mx-auto mb-4 bg-green-100 rounded-full flex items-center justify-center">
+                  <Camera className="w-8 h-8 text-green-600" />
+                </div>
+                <h3 className="font-semibold text-green-800 mb-2">Take a New Photo</h3>
+                <p className="text-sm text-gray-600 mb-4">
+                  Upload a clear photo of your crop for better identification
+                </p>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageSelect}
+                  className="hidden"
+                  id="image-upload"
+                />
+                <Button asChild>
+                  <label htmlFor="image-upload" className="cursor-pointer">
+                    <Camera className="w-4 h-4 mr-2" />
+                    Choose Photo
+                  </label>
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {/* Image Preview */}
+                <div className="relative">
+                  <img
+                    src={previewUrl}
+                    alt="Preview"
+                    className="w-full h-48 object-cover rounded-lg"
+                  />
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="absolute top-2 right-2 bg-white/80 hover:bg-white"
+                    onClick={handleRetake}
+                  >
+                    <Camera className="w-4 h-4 mr-1" />
+                    Retake
+                  </Button>
+                </div>
+
+                {/* Upload Button */}
+                <Button
+                  onClick={handleUpload}
+                  disabled={isUploading}
+                  className="w-full bg-green-600 hover:bg-green-700"
+                >
+                  {isUploading ? (
+                    <>
+                      <div className="loading-spinner w-4 h-4 mr-2" />
+                      Uploading...
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="w-4 h-4 mr-2" />
+                      Upload Photo
+                    </>
+                  )}
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Crop Identification Result */}
+        {cropIdentification && (
+          <Card className="border-blue-200 bg-blue-50">
+            <CardContent className="p-4">
+              <div className="flex items-start space-x-3">
+                <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
+                  <Bot className="w-4 h-4 text-blue-600" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-blue-800 mb-2">AI Crop Identification</h3>
+                  <p className="text-sm text-blue-700">{cropIdentification}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Action Buttons */}
+        {selectedImage && (
+          <div className="flex space-x-2">
+            <Button
+              variant="outline"
+              onClick={handleRetake}
+              className="flex-1"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => navigate(`/crop/${cropId}`)}
+              className="flex-1 bg-green-600 hover:bg-green-700"
+            >
+              Done
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1003,6 +1308,7 @@ function App() {
             <Route path="/dashboard" element={<HomePage />} />
             <Route path="/crop/:cropId" element={<CropDetailPage />} />
             <Route path="/crop/:cropId/chat" element={<ChatInterface />} />
+            <Route path="/crop/:cropId/camera" element={<CameraPage />} />
             <Route path="*" element={<Navigate to="/" />} />
           </Routes>
         </BrowserRouter>
