@@ -1,0 +1,452 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+/* Root CSS Variables - Kerala Farmers Theme */
+:root {
+  --primary-green: #22C55E;
+  --dark-green: #16A34A;
+  --light-green: #DCFCE7;
+  --success-green: #10B981;
+  --warning-orange: #F59E0B;
+  --error-red: #EF4444;
+  --bg-gray-50: #F9FAFB;
+  --bg-gray-100: #E5E7EB;
+  --text-gray-600: #6B7280;
+  --text-gray-800: #374151;
+}
+
+/* Global Styles */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: var(--bg-gray-50);
+  color: var(--text-gray-800);
+  line-height: 1.5;
+}
+
+.font-inter {
+  font-family: 'Inter', sans-serif;
+}
+
+/* App Layout */
+.App {
+  min-height: 100vh;
+  position: relative;
+}
+
+/* Custom Scrollbar for Chat */
+.chat-scrollarea {
+  scrollbar-width: thin;
+  scrollbar-color: var(--primary-green) transparent;
+}
+
+.chat-scrollarea::-webkit-scrollbar {
+  width: 4px;
+}
+
+.chat-scrollarea::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.chat-scrollarea::-webkit-scrollbar-thumb {
+  background-color: var(--primary-green);
+  border-radius: 2px;
+}
+
+/* Custom animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out;
+}
+
+.animate-slide-in-right {
+  animation: slideInRight 0.3s ease-out;
+}
+
+.animate-slide-in-left {
+  animation: slideInLeft 0.3s ease-out;
+}
+
+/* Glass morphism effect for cards */
+.glass-card {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+}
+
+/* Custom button hover effects */
+.btn-glow:hover {
+  box-shadow: 0 0 20px rgba(34, 197, 94, 0.3);
+  transform: translateY(-1px);
+  transition: all 0.2s ease-in-out;
+}
+
+/* Weather gradient backgrounds */
+.weather-sunny {
+  background: linear-gradient(135deg, #FFD93D 0%, #FF8C42 100%);
+}
+
+.weather-cloudy {
+  background: linear-gradient(135deg, #74b9ff 0%, #0984e3 100%);
+}
+
+.weather-rainy {
+  background: linear-gradient(135deg, #636e72 0%, #2d3436 100%);
+}
+
+/* Crop health status indicators */
+.health-good {
+  background: linear-gradient(135deg, var(--success-green) 0%, var(--primary-green) 100%);
+}
+
+.health-warning {
+  background: linear-gradient(135deg, var(--warning-orange) 0%, #FF6B35 100%);
+}
+
+.health-critical {
+  background: linear-gradient(135deg, var(--error-red) 0%, #C53030 100%);
+}
+
+/* Mobile-first responsive design */
+@media (max-width: 640px) {
+  .container {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+  
+  /* Increase touch targets for mobile */
+  button, .clickable {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  
+  /* Better spacing on mobile */
+  .mobile-spacing {
+    padding: 1rem;
+  }
+  
+  /* Optimize images for mobile */
+  img {
+    max-width: 100%;
+    height: auto;
+  }
+}
+
+/* Kerala-specific design elements */
+.kerala-green-gradient {
+  background: linear-gradient(135deg, var(--dark-green) 0%, var(--primary-green) 100%);
+}
+
+.kerala-accent-border {
+  border-left: 4px solid var(--primary-green);
+}
+
+/* Activity type specific colors */
+.activity-watering {
+  color: #3B82F6;
+  background-color: #EBF8FF;
+}
+
+.activity-fertilizer {
+  color: var(--primary-green);
+  background-color: var(--light-green);
+}
+
+.activity-pesticide {
+  color: var(--warning-orange);
+  background-color: #FEF3C7;
+}
+
+.activity-harvesting {
+  color: #8B5CF6;
+  background-color: #F3E8FF;
+}
+
+/* Chat message styling */
+.chat-message-user {
+  background: var(--primary-green);
+  color: white;
+  border-radius: 18px 18px 4px 18px;
+  margin-left: 20%;
+}
+
+.chat-message-bot {
+  background: white;
+  color: var(--text-gray-800);
+  border: 1px solid #E5E7EB;
+  border-radius: 18px 18px 18px 4px;
+  margin-right: 20%;
+}
+
+/* Loading spinner */
+.loading-spinner {
+  border: 2px solid var(--light-green);
+  border-top: 2px solid var(--primary-green);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Floating Action Button */
+.fab {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--primary-green);
+  color: white;
+  border: none;
+  box-shadow: 0 4px 12px rgba(34, 197, 94, 0.3);
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+  z-index: 1000;
+}
+
+.fab:hover {
+  transform: scale(1.1);
+  box-shadow: 0 6px 20px rgba(34, 197, 94, 0.4);
+}
+
+/* Image upload preview */
+.image-preview {
+  position: relative;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 2px dashed var(--primary-green);
+  background: var(--light-green);
+  min-height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease-in-out;
+}
+
+.image-preview:hover {
+  border-color: var(--dark-green);
+  background: #D1FAE5;
+}
+
+/* Status badges */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: capitalize;
+}
+
+.status-online {
+  background: var(--light-green);
+  color: var(--dark-green);
+}
+
+.status-offline {
+  background: #FEE2E2;
+  color: #DC2626;
+}
+
+/* Progressive Web App styling */
+.pwa-install-banner {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--primary-green);
+  color: white;
+  padding: 12px 16px;
+  z-index: 1001;
+  transform: translateY(100%);
+  transition: transform 0.3s ease-in-out;
+}
+
+.pwa-install-banner.show {
+  transform: translateY(0);
+}
+
+/* Accessibility improvements */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Focus visible for better keyboard navigation */
+.focus-visible:focus {
+  outline: 2px solid var(--primary-green);
+  outline-offset: 2px;
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  :root {
+    --primary-green: #16A34A;
+    --text-gray-800: #000000;
+    --bg-gray-50: #FFFFFF;
+  }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Print styles */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  
+  .print-friendly {
+    background: white !important;
+    color: black !important;
+  }
+}
+
+/* Custom utility classes */
+.text-balance {
+  text-wrap: balance;
+}
+
+.gradient-text {
+  background: linear-gradient(135deg, var(--dark-green), var(--primary-green));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.shadow-kerala {
+  box-shadow: 0 4px 6px -1px rgba(34, 197, 94, 0.1), 0 2px 4px -1px rgba(34, 197, 94, 0.06);
+}
+
+.border-kerala {
+  border-color: var(--primary-green);
+}
+
+/* Crop grid responsive */
+.crop-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 16px;
+}
+
+@media (min-width: 768px) {
+  .crop-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (min-width: 1024px) {
+  .crop-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+/* Form styling improvements */
+.form-group {
+  margin-bottom: 16px;
+}
+
+.form-label {
+  display: block;
+  margin-bottom: 4px;
+  font-weight: 500;
+  color: var(--text-gray-800);
+}
+
+.form-input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #D1D5DB;
+  border-radius: 6px;
+  font-size: 14px;
+  transition: border-color 0.2s ease-in-out;
+}
+
+.form-input:focus {
+  outline: none;
+  border-color: var(--primary-green);
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.1);
+}
+
+/* Error states */
+.error-message {
+  color: var(--error-red);
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+.form-input.error {
+  border-color: var(--error-red);
+}
+
+/* Success states */
+.success-message {
+  color: var(--success-green);
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+.form-input.success {
+  border-color: var(--success-green);
+}
