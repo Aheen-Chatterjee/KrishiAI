@@ -2,11 +2,126 @@
   base = "frontend"
   command = "yarn build"
   publish = "frontend/build"
+  ignore = "/bin/false"
 
 [build.environment]
   NODE_VERSION = "18"
+  YARN_VERSION = "1.22.22"
+  NPM_VERSION = "10.2.4"
 
+# Functions configuration for backend API
+[functions]
+  directory = "backend"
+
+[functions."server"]
+  node_bundler = "esbuild"
+
+# Environment variables
+[context.production.environment]
+  NODE_ENV = "production"
+
+[context.deploy-preview.environment]
+  NODE_ENV = "development"
+
+[context.branch-deploy.environment]
+  NODE_ENV = "development"
+
+# Headers for security and performance
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-XSS-Protection = "1; mode=block"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+
+[[headers]]
+  for = "/api/*"
+  [headers.values]
+    Access-Control-Allow-Origin = "*"
+    Access-Control-Allow-Headers = "Content-Type, Authorization"
+    Access-Control-Allow-Methods = "GET, POST, PUT, DELETE, OPTIONS"
+
+[[headers]]
+  for = "/*.js"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/*.css"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/static/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+# Redirects configuration
+# API routes to functions
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/:splat"
+  status = 200
+  force = true
+
+# SPA fallback - must be last
 [[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
+
+# Health check endpoint
+[[redirects]]
+  from = "/health"
+  to = "/.netlify/functions/health"
+  status = 200
+
+# API documentation redirect
+[[redirects]]
+  from = "/docs"
+  to = "/api/docs"
+  status = 301
+
+[[redirects]]
+  from = "/redoc"
+  to = "/api/redoc"
+  status = 301
+
+# Legacy redirects (if needed)
+[[redirects]]
+  from = "/old-path/*"
+  to = "/new-path/:splat"
+  status = 301
+
+# Build hooks (optional)
+[build.processing]
+  skip_processing = false
+
+[build.processing.css]
+  bundle = true
+  minify = true
+
+[build.processing.js]
+  bundle = true
+  minify = true
+
+[build.processing.html]
+  pretty_urls = true
+
+[build.processing.images]
+  compress = true
+
+# Template configuration
+[template.environment]
+  NODE_VERSION = "18"
+  YARN_FLAGS = "--frozen-lockfile"
+
+# Dev server configuration
+[dev]
+  command = "yarn start"
+  port = 3000
+  publish = "frontend/build"
+
+[dev.environment]
+  NODE_ENV = "development"
