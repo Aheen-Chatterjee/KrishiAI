@@ -15,11 +15,16 @@ import base64
 import requests
 from PIL import Image
 import io
+from fastapi.staticfiles import StaticFiles
 from openai import AsyncOpenAI
+
 
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
+
+UPLOAD_DIR = ROOT_DIR / "uploads"
+UPLOAD_DIR.mkdir(exist_ok=True)
 
 # MongoDB connection - will be initialized on startup
 client = None
@@ -228,6 +233,86 @@ async def identify_crop_from_image(image_base64: str):
 # API Routes
 
 # User Management
+# Serve uploaded images as static files
+app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
+
+@api_router.post("/upload-image")
+async def upload_image(file: UploadFile = File()):
+    """
+    Upload an image and return its URL.
+    """
+    # Ensure the file is an image
+    if not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="Only image files are allowed.")
+
+    # Generate a unique filename
+    ext = Path(file.filename).suffix
+    filename = f"{uuid.uuid4().hex}{ext}"
+    file_path = UPLOAD_DIR / filename
+
+    # Save the file
+    with open(file_path, "wb") as f:
+        content = await file.read()
+        f.write(content)
+
+    # Return the URL to access the image
+    image_url = f"/uploads/{filename}"
+    return {"image_url": image_url}
+
+@api_router.post("/upload-and-identify-crop")
+async def upload_and_identify_crop(file: UploadFile = File()):
+    """
+    Upload an image and identify the crop using AI.
+    Returns both the image URL and crop identification result.
+    """
+    # Ensure the file is an image
+    if not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="Only image files are allowed.")
+
+    # Check file size (limit to 10MB)
+    file_size = 0
+    content = await file.read()
+    file_size = len(content)
+    
+    if file_size > 10 * 1024 * 1024:  # 10MB limit
+        raise HTTPException(status_code=400, detail="File size too large. Maximum size is 10MB.")
+
+    # Generate a unique filename
+    ext = Path(file.filename).suffix
+    filename = f"{uuid.uuid4().hex}{ext}"
+    file_path = UPLOAD_DIR / filename
+
+    # Save the file
+    with open(file_path, "wb") as f:
+        f.write(content)
+
+    # Get the image URL
+    image_url = f"/uploads/{filename}"
+
+    try:
+        # Convert image to base64 for AI processing
+        image_base64 = base64.b64encode(content).decode('utf-8')
+        
+        # Identify crop using the existing function
+        crop_identification = await identify_crop_from_image(image_base64)
+        
+        return {
+            "image_url": image_url,
+            "crop_identification": crop_identification,
+            "filename": filename,
+            "file_size": file_size
+        }
+    except Exception as e:
+        logging.error(f"Error processing image for crop identification: {e}")
+        # Still return the uploaded image URL even if AI processing fails
+        return {
+            "image_url": image_url,
+            "crop_identification": "Unable to identify crop from image due to processing error.",
+            "filename": filename,
+            "file_size": file_size,
+            "error": str(e)
+        }
+
 @api_router.post("/users", response_model=User)
 async def create_user(user_data: UserCreate):
     check_database_availability()
@@ -543,3 +628,7 @@ async def startup_db_client():
 async def shutdown_db_client():
     if client:
         client.close()
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
