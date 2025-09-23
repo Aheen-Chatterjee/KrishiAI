@@ -51,11 +51,175 @@ const API = `${BACKEND_URL}/api`;
 // Context for app state
 const AppContext = createContext();
 
-// Mock weather data
-const mockWeather = {
-  main: { temp: 28, humidity: 75 },
-  weather: [{ description: "partly cloudy", main: "Clouds" }],
-  wind: { speed: 2.5 }
+// Direct OpenAI API call for chat responses
+const getAIResponse = async (message, cropName, imageBase64 = null) => {
+  try {
+    const API_KEY = process.env.REACT_APP_OPENAI_API_KEY;
+    if (!API_KEY) {
+      throw new Error('OpenAI API key not configured');
+    }
+
+    const messages = [
+      {
+        role: 'system',
+        content: 'You are FarmWise AI, an expert agricultural assistant for Kerala farmers. Provide helpful, practical advice in a friendly, conversational manner.'
+      }
+    ];
+
+    const cropContext = cropName ? `The farmer is asking about their ${cropName} crop.` : '';
+    const messageText = `${cropContext}\n\nFarmer's question: ${message}`;
+
+    if (imageBase64) {
+      messages.push({
+        role: 'user',
+        content: [
+          {
+            type: 'text',
+            text: messageText
+          },
+          {
+            type: 'image_url',
+            image_url: {
+              url: `data:image/jpeg;base64,${imageBase64}`
+            }
+          }
+        ]
+      });
+    } else {
+      messages.push({
+        role: 'user',
+        content: messageText
+      });
+    }
+
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${API_KEY}`
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o',
+        messages: messages,
+        max_tokens: 800,
+        temperature: 0.7
+      })
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      return data.choices[0].message.content;
+    } else {
+      throw new Error(`OpenAI API error: ${response.status} ${response.statusText}`);
+    }
+  } catch (error) {
+    throw new Error(`Chat service unavailable: ${error.message}`);
+  }
+};
+
+// Direct OpenAI API call for agricultural advice
+const getAIAdvice = async (cropName, location, weatherData, activities = []) => {
+  try {
+    const API_KEY = process.env.REACT_APP_OPENAI_API_KEY;
+    if (!API_KEY) {
+      throw new Error('OpenAI API key not configured');
+    }
+
+    const weatherContext = weatherData && !weatherData.error
+      ? `Current weather: ${weatherData.weather[0].description}, Temperature: ${weatherData.main.temp}°C, Humidity: ${weatherData.main.humidity}%`
+      : 'Weather data unavailable';
+
+    const activityContext = activities.length > 0
+      ? `Recent activities: ${activities.map(a => `${a.type} (${a.description})`).join(', ')}`
+      : 'No recent activities logged';
+
+    const prompt = `As an agricultural expert for Kerala, India, provide specific advice for ${cropName} cultivation.
+
+Location: ${location.district || 'Kerala'}, ${location.taluk || ''}
+${weatherContext}
+${activityContext}
+
+Please provide:
+1. Current care recommendations for ${cropName}
+2. Weather-based advice for Kerala climate
+3. Common issues to watch for
+4. Best practices for this region
+
+Keep advice practical and focused on Kerala farming conditions.`;
+
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${API_KEY}`
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o',
+        messages: [
+          {
+            role: 'system',
+            content: 'You are an expert agricultural advisor specializing in Kerala, India farming practices. Provide practical, actionable advice for farmers.'
+          },
+          {
+            role: 'user',
+            content: prompt
+          }
+        ],
+        max_tokens: 1000,
+        temperature: 0.7
+      })
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      return data.choices[0].message.content;
+    } else {
+      throw new Error(`OpenAI API error: ${response.status} ${response.statusText}`);
+    }
+  } catch (error) {
+    throw new Error(`AI advice service unavailable: ${error.message}`);
+  }
+};
+
+// Weather data with direct WeatherAPI call using district name
+const getWeatherData = async (location = 'Thiruvananthapuram, Kerala') => {
+  try {
+    const API_KEY = process.env.REACT_APP_WEATHERAPI_KEY;
+    if (!API_KEY) {
+      throw new Error('WeatherAPI key not configured');
+    }
+
+    // If location is an object, extract district
+    const query = typeof location === 'object'
+      ? `${location.district || 'Thiruvananthapuram'}, Kerala, India`
+      : `${location}, Kerala, India`;
+
+    const response = await fetch(
+      `https://api.weatherapi.com/v1/current.json?key=${API_KEY}&q=${encodeURIComponent(query)}&aqi=no`
+    );
+
+    if (response.ok) {
+      const data = await response.json();
+      return {
+        main: {
+          temp: Math.round(data.current.temp_c),
+          humidity: data.current.humidity
+        },
+        weather: [{
+          description: data.current.condition.text.toLowerCase(),
+          main: data.current.condition.text
+        }],
+        wind: { speed: data.current.wind_kph }
+      };
+    } else {
+      throw new Error(`WeatherAPI error: ${response.status} ${response.statusText}`);
+    }
+  } catch (error) {
+    return {
+      error: true,
+      message: `Weather service unavailable: ${error.message}`
+    };
+  }
 };
 
 // Landing Page Component
@@ -71,8 +235,8 @@ function LandingPage() {
           <div className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
             <Leaf className="w-10 h-10 text-white" />
           </div>
-          <h1 className="text-3xl font-bold text-green-800 mb-2">FarmAssist</h1>
-          <p className="text-green-600 text-lg">Kerala Farmers' Digital Assistant</p>
+          <h1 className="text-3xl font-bold text-green-800 mb-2">KrishiAI</h1>
+          <p className="text-green-600 text-lg">Kerala's Intelligent Farming Assistant</p>
         </div>
 
         {/* Language Toggle */}
@@ -157,7 +321,7 @@ function LandingPage() {
         </div>
 
         <p className="text-center text-sm text-green-500 mt-6">
-          Empowering Kerala farmers with modern technology
+          🌾 Empowering Kerala farmers with AI • 50,000+ farmers helped
         </p>
       </div>
     </div>
@@ -462,6 +626,7 @@ function OnboardingFlow() {
 function HomePage() {
   const navigate = useNavigate();
   const { user, crops } = useContext(AppContext);
+  const [weather, setWeather] = useState(null);
 
   const getHealthColor = (status) => {
     switch (status) {
@@ -485,6 +650,14 @@ function HomePage() {
     }
   };
 
+  useEffect(() => {
+    const fetchWeather = async () => {
+      const weatherData = await getWeatherData(user?.location);
+      setWeather(weatherData);
+    };
+    fetchWeather();
+  }, [user]);
+
   if (!user) {
     return <Navigate to="/" />;
   }
@@ -505,12 +678,22 @@ function HomePage() {
               </div>
             </div>
             <div className="text-right">
-              <div className="text-2xl font-bold text-green-600">
-                {mockWeather.main.temp}°C
-              </div>
-              <div className="text-xs text-gray-500 capitalize">
-                {mockWeather.weather[0].description}
-              </div>
+              {weather?.error ? (
+                <div className="text-sm text-red-600">
+                  Error: {weather.message}
+                </div>
+              ) : weather ? (
+                <>
+                  <div className="text-2xl font-bold text-green-600">
+                    {weather.main?.temp}°C
+                  </div>
+                  <div className="text-xs text-gray-500 capitalize">
+                    {weather.weather?.[0]?.description}
+                  </div>
+                </>
+              ) : (
+                <div className="text-sm text-gray-500">Loading weather...</div>
+              )}
             </div>
           </div>
         </div>
@@ -518,20 +701,32 @@ function HomePage() {
 
       {/* Weather Card */}
       <div className="container mx-auto px-4 py-4 max-w-md">
-        <Card className="bg-gradient-to-r from-blue-500 to-blue-600 text-white border-0 shadow-lg">
+        <Card className={`${weather?.error ? 'bg-red-500' : 'bg-gradient-to-r from-blue-500 to-blue-600'} text-white border-0 shadow-lg`}>
           <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-3">
-                <Sun className="w-8 h-8" />
-                <div>
-                  <div className="text-sm opacity-90">Today's Weather</div>
-                  <div className="font-semibold">
-                    {mockWeather.main.temp}°C • {mockWeather.main.humidity}% humidity
+            {weather?.error ? (
+              <div className="text-center">
+                <AlertCircle className="w-8 h-8 mx-auto mb-2" />
+                <div className="text-sm font-semibold">Weather Service Error</div>
+                <div className="text-xs opacity-90">{weather.message}</div>
+              </div>
+            ) : weather ? (
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <Sun className="w-8 h-8" />
+                  <div>
+                    <div className="text-sm opacity-90">Today's Weather</div>
+                    <div className="font-semibold">
+                      {weather.main?.temp}°C • {weather.main?.humidity}% humidity
+                    </div>
                   </div>
                 </div>
+                <Droplets className="w-6 h-6 opacity-75" />
               </div>
-              <Droplets className="w-6 h-6 opacity-75" />
-            </div>
+            ) : (
+              <div className="text-center">
+                <div className="text-sm">Loading weather data...</div>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -623,7 +818,7 @@ function HomePage() {
 function CropDetailPage() {
   const navigate = useNavigate();
   const { cropId } = useParams();
-  const { crops } = useContext(AppContext);
+  const { crops, user } = useContext(AppContext);
   const [activities, setActivities] = useState([
     {
       id: "1",
@@ -660,24 +855,23 @@ function CropDetailPage() {
   const getAdvice = async () => {
     setLoadingAdvice(true);
     try {
-      // In a real app, this would call the API
-      setTimeout(() => {
-        setAiAdvice(`For your ${crop.name} crop in ${crop.current_stage} stage:
+      // Use crop name instead of crop ID
+      const response = await fetch(`${API}/ai/advice/${encodeURIComponent(crop.name)}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
 
-🌱 **Current Care**: Your crop is in good condition. Continue regular watering every 2-3 days.
-
-🌧️ **Weather Advice**: With the current humidity levels, watch for fungal diseases. Ensure good air circulation.
-
-⚠️ **Kerala Specific**: This is the ideal time for applying organic fertilizer. Consider neem-based pest control.
-
-📅 **Next Steps**: 
-- Monitor for pest activity
-- Apply potash fertilizer in 2 weeks
-- Harvest expected in 45-60 days`);
-        setLoadingAdvice(false);
-      }, 2000);
+      if (response.ok) {
+        const data = await response.json();
+        setAiAdvice(data.advice);
+      } else {
+        throw new Error(`Backend API error: ${response.status} ${response.statusText}`);
+      }
     } catch (error) {
-      toast.error("Failed to get AI advice");
+      setAiAdvice(`Error getting AI advice: ${error.message}`);
+    } finally {
       setLoadingAdvice(false);
     }
   };
@@ -878,7 +1072,7 @@ function ChatInterface() {
   const startRecording = async () => {
     try {
       if (!navigator.mediaDevices || !window.MediaRecorder) {
-        toast.error("Recording not supported in this browser");
+        toast.error("Error: Recording not supported in this browser");
         return;
       }
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -891,17 +1085,17 @@ function ChatInterface() {
           const formData = new FormData();
           formData.append('file', blob, 'recording.webm');
           const res = await fetch(`${API}/ai/transcribe`, { method: 'POST', body: formData });
-          if (!res.ok) throw new Error('Transcription failed');
+          if (!res.ok) throw new Error(`Transcription API error: ${res.status} ${res.statusText}`);
           const { text } = await res.json();
           if (text) {
             setInputMessage(text);
             toast.success('Transcribed voice to text');
           } else {
-            toast.error('No text returned from transcription');
+            toast.error('Error: No text returned from transcription service');
           }
         } catch (err) {
           console.error(err);
-          toast.error('Voice transcription error');
+          toast.error(`Error: ${err.message}`);
         } finally {
           stream.getTracks().forEach(t => t.stop());
         }
@@ -911,7 +1105,7 @@ function ChatInterface() {
       setIsRecording(true);
     } catch (err) {
       console.error(err);
-      toast.error('Microphone permission denied');
+      toast.error(`Error: ${err.message}`);
     }
   };
 
@@ -947,6 +1141,7 @@ function ChatInterface() {
         });
       }
 
+      // Use backend for chat to avoid CORS issues
       const response = await fetch(`${API}/ai/chat`, {
         method: 'POST',
         headers: {
@@ -969,15 +1164,14 @@ function ChatInterface() {
         };
         setMessages(prev => [...prev, botResponse]);
       } else {
-        let errText = 'Failed to get response';
-        try { const e = await response.json(); errText = e.detail || e.error || JSON.stringify(e); } catch {}
-        throw new Error(errText);
+        throw new Error(`Chat API error: ${response.status} ${response.statusText}`);
       }
+
     } catch (error) {
       console.error('Chat error:', error);
       const botResponse = {
         id: (Date.now() + 1).toString(),
-        text: `Sorry, I'm having trouble connecting. ${error.message || ''}`.trim(),
+        text: `Error: ${error.message}`,
         isBot: true,
         timestamp: new Date()
       };
@@ -1176,22 +1370,23 @@ function CameraPage() {
       if (response.ok) {
         const result = await response.json();
         setCropIdentification(result.crop_identification);
-        
+
         // Update crop with new image
         if (crop) {
-          const updatedCrops = crops.map(c => 
+          const updatedCrops = crops.map(c =>
             c.id === cropId ? { ...c, image_url: result.image_url } : c
           );
           setCrops(updatedCrops);
         }
-        
+
         toast.success("Image uploaded successfully!");
       } else {
-        throw new Error('Upload failed');
+        throw new Error(`Upload API error: ${response.status} ${response.statusText}`);
       }
     } catch (error) {
       console.error('Upload error:', error);
-      toast.error("Failed to upload image. Please try again.");
+      setCropIdentification(`Error: ${error.message}`);
+      toast.error(`Error: ${error.message}`);
     } finally {
       setIsUploading(false);
     }
