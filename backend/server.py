@@ -17,7 +17,6 @@ from PIL import Image
 import io
 from fastapi.staticfiles import StaticFiles
 from openai import AsyncOpenAI
-import python_weather
 
 
 ROOT_DIR = Path(__file__).parent
@@ -98,6 +97,7 @@ class ActivityCreate(BaseModel):
     description: str
     quantity: Optional[str] = None
     notes: Optional[str] = None
+    image_url: Optional[str] = None
 
 class AIAdvice(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
@@ -195,7 +195,8 @@ Please provide:
 3. Common issues to watch for
 4. Best practices for this region
 
-Keep advice practical and focused on Kerala farming conditions."""
+Keep advice practical and focused on Kerala farming conditions.
+Dont use #### in the response instead use some basic icons."""
 
         response = await openai_client.chat.completions.create(
             model="gpt-4o",
