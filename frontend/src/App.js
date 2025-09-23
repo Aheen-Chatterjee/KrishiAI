@@ -71,7 +71,7 @@ function LandingPage() {
           <div className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
             <Leaf className="w-10 h-10 text-white" />
           </div>
-          <h1 className="text-3xl font-bold text-green-800 mb-2">FarmWise</h1>
+          <h1 className="text-3xl font-bold text-green-800 mb-2">FarmAssist</h1>
           <p className="text-green-600 text-lg">Kerala Farmers' Digital Assistant</p>
         </div>
 
@@ -229,7 +229,7 @@ function OnboardingFlow() {
 
     setUser(userData);
     setCrops(userCrops);
-    toast.success("Welcome to FarmWise!");
+    toast.success("Welcome to FarmAssist!");
     navigate('/dashboard');
   };
 
@@ -278,7 +278,7 @@ function OnboardingFlow() {
         {step === 1 && (
           <Card className="shadow-lg border-green-200">
             <CardHeader className="text-center">
-              <CardTitle className="text-green-800">Welcome to FarmWise!</CardTitle>
+              <CardTitle className="text-green-800">Welcome to FarmAssist!</CardTitle>
               <CardDescription>Let's set up your profile</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
