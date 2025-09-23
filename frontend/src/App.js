@@ -25,6 +25,7 @@ import {
   Droplets, 
   Camera, 
   MessageCircle, 
+  Mic,
   Plus, 
   Settings, 
   MapPin, 
@@ -44,7 +45,7 @@ import {
   ArrowLeft
 } from "lucide-react";
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || "http://localhost:8000";
 const API = `${BACKEND_URL}/api`;
 
 // Context for app state
@@ -845,6 +846,8 @@ function ChatInterface() {
   const [isLoading, setIsLoading] = useState(false);
   const [selectedImage, setSelectedImage] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [mediaRecorder, setMediaRecorder] = useState(null);
 
   const crop = crops.find(c => c.id === cropId);
 
@@ -870,6 +873,53 @@ function ChatInterface() {
   const removeImage = () => {
     setSelectedImage(null);
     setPreviewUrl(null);
+  };
+
+  const startRecording = async () => {
+    try {
+      if (!navigator.mediaDevices || !window.MediaRecorder) {
+        toast.error("Recording not supported in this browser");
+        return;
+      }
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+      const chunks = [];
+      recorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
+      recorder.onstop = async () => {
+        try {
+          const blob = new Blob(chunks, { type: 'audio/webm' });
+          const formData = new FormData();
+          formData.append('file', blob, 'recording.webm');
+          const res = await fetch(`${API}/ai/transcribe`, { method: 'POST', body: formData });
+          if (!res.ok) throw new Error('Transcription failed');
+          const { text } = await res.json();
+          if (text) {
+            setInputMessage(text);
+            toast.success('Transcribed voice to text');
+          } else {
+            toast.error('No text returned from transcription');
+          }
+        } catch (err) {
+          console.error(err);
+          toast.error('Voice transcription error');
+        } finally {
+          stream.getTracks().forEach(t => t.stop());
+        }
+      };
+      recorder.start();
+      setMediaRecorder(recorder);
+      setIsRecording(true);
+    } catch (err) {
+      console.error(err);
+      toast.error('Microphone permission denied');
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+      mediaRecorder.stop();
+    }
+    setIsRecording(false);
   };
 
   const sendMessage = async () => {
@@ -919,13 +969,15 @@ function ChatInterface() {
         };
         setMessages(prev => [...prev, botResponse]);
       } else {
-        throw new Error('Failed to get response');
+        let errText = 'Failed to get response';
+        try { const e = await response.json(); errText = e.detail || e.error || JSON.stringify(e); } catch {}
+        throw new Error(errText);
       }
     } catch (error) {
       console.error('Chat error:', error);
       const botResponse = {
         id: (Date.now() + 1).toString(),
-        text: "Sorry, I'm having trouble connecting. Please try again later.",
+        text: `Sorry, I'm having trouble connecting. ${error.message || ''}`.trim(),
         isBot: true,
         timestamp: new Date()
       };
@@ -1063,6 +1115,15 @@ function ChatInterface() {
               onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
               className="flex-1"
             />
+            <Button
+              type="button"
+              variant={isRecording ? 'destructive' : 'outline'}
+              size="sm"
+              onClick={isRecording ? stopRecording : startRecording}
+              disabled={isLoading}
+            >
+              <Mic className={`w-4 h-4 ${isRecording ? 'animate-pulse' : ''}`} />
+            </Button>
             <Button 
               size="sm" 
               onClick={sendMessage}

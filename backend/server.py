@@ -17,7 +17,7 @@ from PIL import Image
 import io
 from fastapi.staticfiles import StaticFiles
 from openai import AsyncOpenAI
-
+import python_weather
 
 
 ROOT_DIR = Path(__file__).parent
@@ -37,8 +37,9 @@ app = FastAPI()
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
 
-# OpenWeather API
-OPENWEATHER_API_KEY = "your_openweather_key_here"  # You'll need to get this
+# Weather API keys
+OPENWEATHER_API_KEY = "your_openweather_key_here"  # Legacy; optional
+WEATHERAPI_KEY = os.environ.get('WEATHERAPI_KEY')
 OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
 
 # Initialize OpenAI client
@@ -139,16 +140,34 @@ def check_database_availability():
     return True
 
 async def get_weather_data(lat: float, lon: float):
-    """Get weather data from OpenWeatherMap"""
+    """Get weather data from WeatherAPI.com using latitude and longitude.
+
+    Requires environment variable WEATHERAPI_KEY.
+    """
     try:
-        # For MVP demo, return mock weather data for Kerala
-        mock_weather = {
-            "weather": [{"description": "partly cloudy", "main": "Clouds"}],
-            "main": {"temp": 28, "humidity": 75},
-            "wind": {"speed": 2.5},
-            "name": "Kerala"
+        if not WEATHERAPI_KEY:
+            raise ValueError("WEATHERAPI_KEY not configured")
+
+        url = (
+            f"https://api.weatherapi.com/v1/current.json?key={WEATHERAPI_KEY}"
+            f"&q={lat},{lon}&aqi=no"
+        )
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+
+        current = data.get('current', {})
+        location = data.get('location', {})
+        condition = (current.get('condition') or {})
+
+        return {
+            'weather': condition.get('text'),
+            'temperature': current.get('temp_c'),
+            'humidity': current.get('humidity'),
+            'wind': current.get('wind_kph'),
+            'datetime': location.get('localtime') or datetime.now(timezone.utc).isoformat(),
+            'name': location.get('name')
         }
-        return mock_weather
     except Exception as e:
         logging.error(f"Weather API error: {e}")
         return None
@@ -161,7 +180,7 @@ async def get_ai_advice(crop_name: str, location: dict, weather_data: dict = Non
     try:
         weather_context = ""
         if weather_data:
-            weather_context = f"Current weather: {weather_data.get('weather', [{}])[0].get('description', 'N/A')}, Temperature: {weather_data.get('main', {}).get('temp', 'N/A')}°C, Humidity: {weather_data.get('main', {}).get('humidity', 'N/A')}%"
+            weather_context = f"Current weather: {weather_data.get('weather', [{}])}, Temperature: {weather_data.get('temperature', {})}, Humidity: {weather_data.get('humidity', {})}, Wind: {weather_data.get('wind', {})}, Datetime: {weather_data.get('datetime', {})}, Name: {weather_data.get('name', {})}"
 
         location_context = f"Location: {location.get('district', 'Kerala')}, {location.get('taluk', '')}"
         
@@ -532,6 +551,54 @@ async def chat_with_ai(chat_data: ChatMessage):
     except Exception as e:
         logging.error(f"AI chat error: {e}")
         raise HTTPException(status_code=500, detail="Error processing chat message")
+
+@api_router.post("/ai/transcribe")
+async def transcribe_audio(file: UploadFile = File(...)):
+    if not openai_client:
+        raise HTTPException(status_code=503, detail="AI features are currently unavailable. Please configure the OpenAI API key.")
+
+    try:
+        # Be permissive with content-type as some browsers omit it on Blob uploads
+        if file.content_type and not (file.content_type.startswith("audio/") or file.content_type.startswith("video/") or file.content_type == "application/octet-stream"):
+            raise HTTPException(status_code=400, detail=f"Unsupported file type: {file.content_type}")
+
+        # Read file bytes
+        content = await file.read()
+        if not content or len(content) == 0:
+            raise HTTPException(status_code=400, detail="Received empty audio file")
+        if len(content) > 20 * 1024 * 1024:
+            raise HTTPException(status_code=413, detail="Audio file too large (max 20MB)")
+
+        # Use Whisper (or gpt-4o-mini-transcribe) for multilingual transcription
+        # The client expects a file-like object with a filename
+        audio_file = io.BytesIO(content)
+        audio_file.name = file.filename or "audio.webm"
+
+        # Prefer whisper-1 for broad availability; fallback to gpt-4o-mini-transcribe
+        try:
+            logging.info(f"Transcribing with whisper-1, size={len(content)} bytes, type={file.content_type}")
+            result = await openai_client.audio.transcriptions.create(
+                model="whisper-1",
+                file=audio_file
+            )
+        except Exception:
+            logging.info("Falling back to gpt-4o-mini-transcribe")
+            result = await openai_client.audio.transcriptions.create(
+                model="gpt-4o-mini-transcribe",
+                file=audio_file
+            )
+
+        # Result may have .text depending on SDK; normalize to { text }
+        text = getattr(result, 'text', None)
+        if not text and isinstance(result, dict):
+            text = result.get('text')
+
+        return {"text": text or ""}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Audio transcription error: {e}")
+        raise HTTPException(status_code=500, detail=f"Error transcribing audio: {e}")
 
 # Weather data
 @api_router.get("/weather/{lat}/{lon}")
