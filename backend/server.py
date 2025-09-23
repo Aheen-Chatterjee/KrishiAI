@@ -17,7 +17,7 @@ from PIL import Image
 import io
 from fastapi.staticfiles import StaticFiles
 from openai import AsyncOpenAI
-import python_weather
+
 
 
 ROOT_DIR = Path(__file__).parent
