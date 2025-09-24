@@ -1,5 +1,5 @@
 import React, { useState, useEffect, createContext, useContext } from "react";
-import { BrowserRouter, Routes, Route, Navigate, useNavigate, useParams } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useNavigate, useParams, useLocation } from "react-router-dom";
 import axios from "axios";
 import "./App.css";
 
@@ -388,7 +388,8 @@ function OnboardingFlow() {
       current_stage: getRandomStage(),
       health_status: getRandomHealth(),
       last_activity: new Date(Date.now() - Math.random() * 7 * 24 * 60 * 60 * 1000).toISOString(),
-      planting_date: new Date(Date.now() - Math.random() * 180 * 24 * 60 * 60 * 1000).toISOString()
+      planting_date: new Date(Date.now() - Math.random() * 180 * 24 * 60 * 60 * 1000).toISOString(),
+      activities: [] // Initialize empty activities array
     }));
 
     setUser(userData);
@@ -404,7 +405,7 @@ function OnboardingFlow() {
       "Coconut": "https://images.unsplash.com/photo-1601899775653-84124f2e93b7?w=300&h=200&fit=crop",
       "Banana": "https://images.unsplash.com/photo-1571771894821-ce9b6c11b08e?w=300&h=200&fit=crop",
       "Pepper": "https://images.unsplash.com/photo-1524247108137-732e0f642303?w=300&h=200&fit=crop",
-      "Cardamom": "https://images.unsplash.com/photo-1596040033229-a9821ebd058d?w=300&h=200&fit=crop",
+      "Cardamom": "https://images.unsplash.com/photo-1596040033229-a9821ebd058e?w=300&h=200&fit=crop",
       "Ginger": "https://images.unsplash.com/photo-1615485020617-f7f9a21b4f55?w=300&h=200&fit=crop",
       "Turmeric": "https://images.unsplash.com/photo-1615485020542-11c0b37cece8?w=300&h=200&fit=crop",
       "Rubber": "https://images.unsplash.com/photo-1582718471137-c3967ffb1dc8?w=300&h=200&fit=crop"
@@ -818,30 +819,234 @@ function HomePage() {
 function CropDetailPage() {
   const navigate = useNavigate();
   const { cropId } = useParams();
-  const { crops, user } = useContext(AppContext);
-  const [activities, setActivities] = useState([
-    {
-      id: "1",
-      type: "watering",
-      description: "Watered the field",
-      date: "2025-01-15T10:30:00Z",
-      quantity: "500L",
-      notes: "Morning irrigation"
-    },
-    {
-      id: "2", 
-      type: "fertilizer",
-      description: "Applied organic fertilizer",
-      date: "2025-01-10T08:00:00Z",
-      quantity: "2kg",
-      notes: "Used cow dung compost"
+  const location = useLocation();
+  const { crops, setCrops } = useContext(AppContext);
+
+  const crop = crops.find(c => c.id === cropId);
+
+  const [type, setType] = useState("watering");
+  const [description, setDescription] = useState("");
+  const [quantity, setQuantity] = useState("");
+  const [notes, setNotes] = useState("");
+  const [selectedImage, setSelectedImage] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState(null);
+  const [imageUrl, setImageUrl] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleImageSelect = (event) => {
+    const file = event.target.files[0];
+    if (file && file.type.startsWith('image/')) {
+      setSelectedImage(file);
+      setPreviewUrl(URL.createObjectURL(file));
     }
-  ]);
+  };
+
+  const uploadImageIfNeeded = async () => {
+    if (!selectedImage) return null;
+    const formData = new FormData();
+    formData.append('file', selectedImage);
+    const resp = await fetch(`${API}/upload-image`, { method: 'POST', body: formData });
+    if (!resp.ok) throw new Error('Image upload failed');
+    const data = await resp.json();
+    return data.image_url; // backend returns relative path like /uploads/...
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!description.trim()) {
+      toast.error('Please enter a description');
+      return;
+    }
+    setIsSubmitting(true);
+    try {
+      let uploadedUrl = imageUrl;
+      if (!uploadedUrl && selectedImage) {
+        uploadedUrl = await uploadImageIfNeeded();
+        setImageUrl(uploadedUrl);
+      }
+
+      const newActivity = {
+        id: Math.random().toString(36).slice(2),
+        type,
+        description: description.trim(),
+        date: new Date().toISOString(),
+        quantity: quantity || undefined,
+        notes: notes || undefined,
+        image_url: uploadedUrl || undefined
+      };
+
+      // Navigate back to crop detail with the new activity in state
+      navigate(`/crop/${cropId}`, { state: { newActivity } });
+      toast.success('Activity logged');
+    } catch (err) {
+      toast.error('Failed to save activity');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <div className="bg-white shadow-sm border-b">
+        <div className="container mx-auto px-4 py-4 max-w-md">
+          <div className="flex items-center space-x-4">
+            <Button variant="ghost" size="sm" onClick={() => navigate(`/crop/${cropId}`)}>
+              <ArrowLeft className="w-5 h-5" />
+            </Button>
+            <h1 className="text-xl font-bold text-green-800">Log Activity</h1>
+          </div>
+        </div>
+      </div>
+
+      <div className="container mx-auto px-4 py-4 max-w-md space-y-4">
+        {crop && (
+          <Card className="border-green-200">
+            <CardContent className="p-4">
+              <div className="flex items-center space-x-3">
+                <img src={crop.image_url} alt={crop.name} className="w-12 h-12 object-cover rounded" />
+                <div>
+                  <div className="font-semibold text-green-800">{crop.name}</div>
+                  <div className="text-xs text-gray-500">Add a new activity</div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        <Card className="border-green-200">
+          <CardContent className="p-4">
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <Label>Type</Label>
+                <Select value={type} onValueChange={setType}>
+                  <SelectTrigger className="mt-1">
+                    <SelectValue placeholder="Select activity type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="watering">Watering</SelectItem>
+                    <SelectItem value="fertilizer">Fertilizer</SelectItem>
+                    <SelectItem value="pesticide">Pesticide</SelectItem>
+                    <SelectItem value="harvesting">Harvesting</SelectItem>
+                    <SelectItem value="planting">Planting</SelectItem>
+                    <SelectItem value="observation">Observation</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label>Description</Label>
+                <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="What did you do?" className="mt-1" />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>Quantity (optional)</Label>
+                  <Input value={quantity} onChange={(e) => setQuantity(e.target.value)} placeholder="e.g., 500L, 2kg" className="mt-1" />
+                </div>
+                <div>
+                  <Label>Notes (optional)</Label>
+                  <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="extra details" className="mt-1" />
+                </div>
+              </div>
+
+              <div>
+                <Label>Photo (optional)</Label>
+                {!selectedImage ? (
+                  <div className="mt-2">
+                    <input id="activity-image" type="file" accept="image/*" onChange={handleImageSelect} className="hidden" />
+                    <Button asChild variant="outline">
+                      <label htmlFor="activity-image" className="cursor-pointer">Choose Image</label>
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="mt-2 space-y-2">
+                    <img src={previewUrl} alt="Preview" className="w-full h-40 object-cover rounded" />
+                    <div className="flex space-x-2">
+                      <Button type="button" variant="outline" onClick={() => { setSelectedImage(null); setPreviewUrl(null); setImageUrl(null); }}>Remove</Button>
+                      <Button type="button" variant="secondary" onClick={async () => { try { const url = await uploadImageIfNeeded(); setImageUrl(url); toast.success('Image uploaded'); } catch { toast.error('Upload failed'); } }}>Upload Image</Button>
+                    </div>
+                    {imageUrl && <div className="text-xs text-gray-500">Uploaded</div>}
+                  </div>
+                )}
+              </div>
+
+              <Button type="submit" className="w-full bg-green-600 hover:bg-green-700" disabled={isSubmitting}>
+                {isSubmitting ? 'Saving...' : 'Save Activity'}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+// Main App Component with Router
+function App() {
+  const [user, setUser] = useState(null);
+  const [crops, setCrops] = useState([]);
+
+  const contextValue = {
+    user,
+    setUser,
+    crops,
+    setCrops
+  };
+
+  return (
+    <AppContext.Provider value={contextValue}>
+      <div className="App font-inter">
+        <Toaster position="top-center" richColors />
+        <BrowserRouter>
+          <Routes>
+            <Route path="/" element={<LandingPage />} />
+            <Route path="/onboarding" element={<OnboardingFlow />} />
+            <Route path="/dashboard" element={<HomePage />} />
+            <Route path="/crop/:cropId" element={<CropDetailPage />} />
+            <Route path="/crop/:cropId/chat" element={<ChatInterface />} />
+            <Route path="/crop/:cropId/camera" element={<CameraPage />} />
+            <Route path="/crop/:cropId/add-activity" element={<AddActivityPage />} />
+            <Route path="*" element={<Navigate to="/" />} />
+          </Routes>
+        </BrowserRouter>
+      </div>
+    </AppContext.Provider>
+  );
+}
+
+export default App;c => c.id === cropId);
+
+  // Local activities state synced from crop
+  const [activities, setActivities] = useState(crop?.activities || []);
+
+  useEffect(() => {
+    if (crop) {
+      setActivities(crop.activities || []);
+    }
+  }, [crop]);
+
+  // Handle new activity from navigation
+  useEffect(() => {
+    const newActivity = location.state?.newActivity;
+    if (newActivity) {
+      // Update global crops
+      const updatedCrops = crops.map(c =>
+        c.id === cropId
+          ? { ...c, activities: [newActivity, ...(c.activities || [])] }
+          : c
+      );
+      setCrops(updatedCrops);
+
+      // Update local activities
+      setActivities(prev => [newActivity, ...prev]);
+
+      // Clear navigation state so it doesn't repeat
+      navigate(location.pathname, { replace: true });
+    }
+  }, [location.state, cropId, crops, setCrops, navigate, location.pathname]);
 
   const [aiAdvice, setAiAdvice] = useState("");
   const [loadingAdvice, setLoadingAdvice] = useState(false);
-
-  const crop = crops.find(c => c.id === cropId);
 
   const getActivityIcon = (type) => {
     switch (type) {
@@ -978,31 +1183,50 @@ function CropDetailPage() {
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
               <CardTitle className="text-lg text-green-800">Recent Activities</CardTitle>
-              <Button size="sm" variant="outline">View All</Button>
+              <Button 
+                size="sm" 
+                variant="outline"
+                onClick={() => navigate(`/crop/${crop.id}/activities`)}
+              >
+                View All
+              </Button>
             </div>
           </CardHeader>
           <CardContent>
-            <div className="space-y-3">
-              {activities.slice(0, 3).map((activity) => (
-                <div key={activity.id} className="flex items-start space-x-3 p-2 rounded-lg bg-gray-50">
-                  {getActivityIcon(activity.type)}
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium text-gray-800">
-                      {activity.description}
-                    </div>
-                    <div className="text-xs text-gray-500 flex items-center space-x-3">
-                      <span>{new Date(activity.date).toLocaleDateString()}</span>
-                      {activity.quantity && <span>• {activity.quantity}</span>}
-                    </div>
-                    {activity.notes && (
-                      <div className="text-xs text-gray-600 mt-1">
-                        {activity.notes}
+            {activities.length === 0 ? (
+              <div className="text-sm text-gray-500 italic">No activities yet.</div>
+            ) : (
+              <div className="space-y-3">
+                {activities.slice(0, 3).map((activity) => (
+                  <div key={activity.id} className="flex items-start space-x-3 p-2 rounded-lg bg-gray-50">
+                    {getActivityIcon(activity.type)}
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium text-gray-800">
+                        {activity.description}
                       </div>
-                    )}
+                      <div className="text-xs text-gray-500 flex items-center space-x-3">
+                        <span>{new Date(activity.date).toLocaleDateString()}</span>
+                        {activity.quantity && <span>• {activity.quantity}</span>}
+                      </div>
+                      {activity.image_url && (
+                        <div className="mt-2">
+                          <img
+                            src={activity.image_url}
+                            alt={activity.description}
+                            className="w-full h-40 object-cover rounded-md border"
+                          />
+                        </div>
+                      )}
+                      {activity.notes && (
+                        <div className="text-xs text-gray-600 mt-1">
+                          {activity.notes}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -1015,7 +1239,7 @@ function CropDetailPage() {
           Log New Activity
         </Button>
       </div>
-
+      
       {/* Fixed Bottom Chat Button */}
       <div className="fixed bottom-4 left-4 right-4 max-w-md mx-auto">
         <Button 
@@ -1089,7 +1313,7 @@ function ChatInterface() {
           const { text } = await res.json();
           if (text) {
             setInputMessage(text);
-            toast.success('Transcribed voice to text');
+            toast.success('Transcribed voice to text successfully');
           } else {
             toast.error('Error: No text returned from transcription service');
           }
@@ -1541,6 +1765,170 @@ function CameraPage() {
   );
 }
 
+// Add Activity Page Component
+function AddActivityPage() {
+  const navigate = useNavigate();
+  const { cropId } = useParams();
+  const { crops } = useContext(AppContext);
+  const crop = crops.find(c => c.id === cropId);
+
+  const [type, setType] = useState("watering");
+  const [description, setDescription] = useState("");
+  const [quantity, setQuantity] = useState("");
+  const [notes, setNotes] = useState("");
+  const [selectedImage, setSelectedImage] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState(null);
+  const [imageUrl, setImageUrl] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleImageSelect = (event) => {
+    const file = event.target.files[0];
+    if (file && file.type.startsWith('image/')) {
+      setSelectedImage(file);
+      setPreviewUrl(URL.createObjectURL(file));
+    }
+  };
+
+  const uploadImageIfNeeded = async () => {
+    if (!selectedImage) return null;
+    const formData = new FormData();
+    formData.append('file', selectedImage);
+    const resp = await fetch(`${API}/upload-image`, { method: 'POST', body: formData });
+    if (!resp.ok) throw new Error('Image upload failed');
+    const data = await resp.json();
+    return data.image_url; // backend returns relative path like /uploads/...
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!description.trim()) {
+      toast.error('Please enter a description');
+      return;
+    }
+    setIsSubmitting(true);
+    try {
+      let uploadedUrl = imageUrl;
+      if (!uploadedUrl && selectedImage) {
+        uploadedUrl = await uploadImageIfNeeded();
+        setImageUrl(uploadedUrl);
+      }
+
+      const newActivity = {
+        id: Math.random().toString(36).slice(2),
+        type,
+        description: description.trim(),
+        date: new Date().toISOString(),
+        quantity: quantity || undefined,
+        notes: notes || undefined,
+        image_url: uploadedUrl || undefined
+      };
+
+      // Navigate back to crop detail with the new activity in state
+      navigate(`/crop/${cropId}`, { state: { newActivity } });
+      toast.success('Activity logged');
+    } catch (err) {
+      toast.error('Failed to save activity');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <div className="bg-white shadow-sm border-b">
+        <div className="container mx-auto px-4 py-4 max-w-md">
+          <div className="flex items-center space-x-4">
+            <Button variant="ghost" size="sm" onClick={() => navigate(`/crop/${cropId}`)}>
+              <ArrowLeft className="w-5 h-5" />
+            </Button>
+            <h1 className="text-xl font-bold text-green-800">Log Activity</h1>
+          </div>
+        </div>
+      </div>
+
+      <div className="container mx-auto px-4 py-4 max-w-md space-y-4">
+        {crop && (
+          <Card className="border-green-200">
+            <CardContent className="p-4">
+              <div className="flex items-center space-x-3">
+                <img src={crop.image_url} alt={crop.name} className="w-12 h-12 object-cover rounded" />
+                <div>
+                  <div className="font-semibold text-green-800">{crop.name}</div>
+                  <div className="text-xs text-gray-500">Add a new activity</div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        <Card className="border-green-200">
+          <CardContent className="p-4">
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <Label>Type</Label>
+                <Select value={type} onValueChange={setType}>
+                  <SelectTrigger className="mt-1">
+                    <SelectValue placeholder="Select activity type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="watering">Watering</SelectItem>
+                    <SelectItem value="fertilizer">Fertilizer</SelectItem>
+                    <SelectItem value="pesticide">Pesticide</SelectItem>
+                    <SelectItem value="harvesting">Harvesting</SelectItem>
+                    <SelectItem value="planting">Planting</SelectItem>
+                    <SelectItem value="observation">Observation</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label>Description</Label>
+                <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="What did you do?" className="mt-1" />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>Quantity (optional)</Label>
+                  <Input value={quantity} onChange={(e) => setQuantity(e.target.value)} placeholder="e.g., 500L, 2kg" className="mt-1" />
+                </div>
+                <div>
+                  <Label>Notes (optional)</Label>
+                  <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="extra details" className="mt-1" />
+                </div>
+              </div>
+
+              <div>
+                <Label>Photo (optional)</Label>
+                {!selectedImage ? (
+                  <div className="mt-2">
+                    <input id="activity-image" type="file" accept="image/*" onChange={handleImageSelect} className="hidden" />
+                    <Button asChild variant="outline">
+                      <label htmlFor="activity-image" className="cursor-pointer">Choose Image</label>
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="mt-2 space-y-2">
+                    <img src={previewUrl} alt="Preview" className="w-full h-40 object-cover rounded" />
+                    <div className="flex space-x-2">
+                      <Button type="button" variant="outline" onClick={() => { setSelectedImage(null); setPreviewUrl(null); setImageUrl(null); }}>Remove</Button>
+                      <Button type="button" variant="secondary" onClick={async () => { try { const url = await uploadImageIfNeeded(); setImageUrl(url); toast.success('Image uploaded'); } catch { toast.error('Upload failed'); } }}>Upload Image</Button>
+                    </div>
+                    {imageUrl && <div className="text-xs text-gray-500">Uploaded</div>}
+                  </div>
+                )}
+              </div>
+
+              <Button type="submit" className="w-full bg-green-600 hover:bg-green-700" disabled={isSubmitting}>
+                {isSubmitting ? 'Saving...' : 'Save Activity'}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
 // Main App Component with Router
 function App() {
   const [user, setUser] = useState(null);
@@ -1565,6 +1953,7 @@ function App() {
             <Route path="/crop/:cropId" element={<CropDetailPage />} />
             <Route path="/crop/:cropId/chat" element={<ChatInterface />} />
             <Route path="/crop/:cropId/camera" element={<CameraPage />} />
+            <Route path="/crop/:cropId/add-activity" element={<AddActivityPage />} />
             <Route path="*" element={<Navigate to="/" />} />
           </Routes>
         </BrowserRouter>
