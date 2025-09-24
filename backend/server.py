@@ -441,41 +441,20 @@ async def get_crop_activities(crop_id: str):
     return [Activity(**parse_from_mongo(activity)) for activity in activities]
 
 # AI Features
-@api_router.post("/ai/advice/{crop_id}")
-async def get_crop_advice(crop_id: str):
-    # Get AI advice even without database - use default crop info
-    if not db:
-        # Provide advice with generic crop information
-        advice_text = await get_ai_advice("crop", {}, None)
-        return {"advice": advice_text, "weather": None, "note": "Database not available - using generic advice"}
+@api_router.post("/ai/advice/{crop_name}")
+async def get_crop_advice(crop_name: str):
+    # Get AI advice using crop name directly
+    try:
+        # Get weather data if available
+        weather_data = None
+        if WEATHERAPI_KEY:
+            weather_data = await get_weather_data(8.5241, 76.9366)  # Default Kerala coordinates
 
-    crop = await db.crops.find_one({"id": crop_id})
-    if not crop:
-        raise HTTPException(status_code=404, detail="Crop not found")
-
-    user = await db.users.find_one({"id": crop["user_id"]})
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-
-    # Get weather data if location available
-    weather_data = None
-    if user.get("location", {}).get("coordinates"):
-        coords = user["location"]["coordinates"]
-        weather_data = await get_weather_data(coords[1], coords[0])  # lat, lon
-
-    advice_text = await get_ai_advice(crop["name"], user.get("location", {}), weather_data)
-
-    # Save advice to database if available
-    if db:
-        advice_obj = AIAdvice(
-            crop_id=crop_id,
-            advice_text=advice_text,
-            weather_data=weather_data or {}
-        )
-        advice_dict = prepare_for_mongo(advice_obj.dict())
-        await db.ai_advice.insert_one(advice_dict)
-
-    return {"advice": advice_text, "weather": weather_data}
+        # Generate advice with crop name
+        advice_text = await get_ai_advice(crop_name, {"district": "Kerala"}, weather_data)
+        return {"advice": advice_text, "weather": weather_data, "note": f"AI advice for {crop_name}"}
+    except Exception as e:
+        return {"advice": f"Error generating advice: {str(e)}", "weather": None, "note": "Error occurred"}
 
 @api_router.post("/ai/identify-crop")
 async def identify_crop(image: UploadFile = File(...)):

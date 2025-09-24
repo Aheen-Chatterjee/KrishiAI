@@ -51,7 +51,176 @@ const API = `${BACKEND_URL}/api`;
 // Context for app state
 const AppContext = createContext();
 
-// Weather will be fetched from backend
+// Direct OpenAI API call for chat responses
+const getAIResponse = async (message, cropName, imageBase64 = null) => {
+  try {
+    const API_KEY = process.env.REACT_APP_OPENAI_API_KEY;
+    if (!API_KEY) {
+      throw new Error('OpenAI API key not configured');
+    }
+
+    const messages = [
+      {
+        role: 'system',
+        content: 'You are FarmWise AI, an expert agricultural assistant for Kerala farmers. Provide helpful, practical advice in a friendly, conversational manner.'
+      }
+    ];
+
+    const cropContext = cropName ? `The farmer is asking about their ${cropName} crop.` : '';
+    const messageText = `${cropContext}\n\nFarmer's question: ${message}`;
+
+    if (imageBase64) {
+      messages.push({
+        role: 'user',
+        content: [
+          {
+            type: 'text',
+            text: messageText
+          },
+          {
+            type: 'image_url',
+            image_url: {
+              url: `data:image/jpeg;base64,${imageBase64}`
+            }
+          }
+        ]
+      });
+    } else {
+      messages.push({
+        role: 'user',
+        content: messageText
+      });
+    }
+
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${API_KEY}`
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o',
+        messages: messages,
+        max_tokens: 800,
+        temperature: 0.7
+      })
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      return data.choices[0].message.content;
+    } else {
+      throw new Error(`OpenAI API error: ${response.status} ${response.statusText}`);
+    }
+  } catch (error) {
+    throw new Error(`Chat service unavailable: ${error.message}`);
+  }
+};
+
+// Direct OpenAI API call for agricultural advice
+const getAIAdvice = async (cropName, location, weatherData, activities = []) => {
+  try {
+    const API_KEY = process.env.REACT_APP_OPENAI_API_KEY;
+    if (!API_KEY) {
+      throw new Error('OpenAI API key not configured');
+    }
+
+    const weatherContext = weatherData && !weatherData.error
+      ? `Current weather: ${weatherData.weather[0].description}, Temperature: ${weatherData.main.temp}°C, Humidity: ${weatherData.main.humidity}%`
+      : 'Weather data unavailable';
+
+    const activityContext = activities.length > 0
+      ? `Recent activities: ${activities.map(a => `${a.type} (${a.description})`).join(', ')}`
+      : 'No recent activities logged';
+
+    const prompt = `As an agricultural expert for Kerala, India, provide specific advice for ${cropName} cultivation.
+
+Location: ${location.district || 'Kerala'}, ${location.taluk || ''}
+${weatherContext}
+${activityContext}
+
+Please provide:
+1. Current care recommendations for ${cropName}
+2. Weather-based advice for Kerala climate
+3. Common issues to watch for
+4. Best practices for this region
+
+Keep advice practical and focused on Kerala farming conditions.`;
+
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${API_KEY}`
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o',
+        messages: [
+          {
+            role: 'system',
+            content: 'You are an expert agricultural advisor specializing in Kerala, India farming practices. Provide practical, actionable advice for farmers.'
+          },
+          {
+            role: 'user',
+            content: prompt
+          }
+        ],
+        max_tokens: 1000,
+        temperature: 0.7
+      })
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      return data.choices[0].message.content;
+    } else {
+      throw new Error(`OpenAI API error: ${response.status} ${response.statusText}`);
+    }
+  } catch (error) {
+    throw new Error(`AI advice service unavailable: ${error.message}`);
+  }
+};
+
+// Weather data with direct WeatherAPI call using district name
+const getWeatherData = async (location = 'Thiruvananthapuram, Kerala') => {
+  try {
+    const API_KEY = process.env.REACT_APP_WEATHERAPI_KEY;
+    if (!API_KEY) {
+      throw new Error('WeatherAPI key not configured');
+    }
+
+    // If location is an object, extract district
+    const query = typeof location === 'object'
+      ? `${location.district || 'Thiruvananthapuram'}, Kerala, India`
+      : `${location}, Kerala, India`;
+
+    const response = await fetch(
+      `https://api.weatherapi.com/v1/current.json?key=${API_KEY}&q=${encodeURIComponent(query)}&aqi=no`
+    );
+
+    if (response.ok) {
+      const data = await response.json();
+      return {
+        main: {
+          temp: Math.round(data.current.temp_c),
+          humidity: data.current.humidity
+        },
+        weather: [{
+          description: data.current.condition.text.toLowerCase(),
+          main: data.current.condition.text
+        }],
+        wind: { speed: data.current.wind_kph }
+      };
+    } else {
+      throw new Error(`WeatherAPI error: ${response.status} ${response.statusText}`);
+    }
+  } catch (error) {
+    return {
+      error: true,
+      message: `Weather service unavailable: ${error.message}`
+    };
+  }
+};
 
 // Landing Page Component
 function LandingPage() {
@@ -66,8 +235,8 @@ function LandingPage() {
           <div className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
             <Leaf className="w-10 h-10 text-white" />
           </div>
-          <h1 className="text-3xl font-bold text-green-800 mb-2">FarmAssist</h1>
-          <p className="text-green-600 text-lg">Kerala Farmers' Digital Assistant</p>
+          <h1 className="text-3xl font-bold text-green-800 mb-2">KrishiAI</h1>
+          <p className="text-green-600 text-lg">Kerala's Intelligent Farming Assistant</p>
         </div>
 
         {/* Language Toggle */}
@@ -152,7 +321,7 @@ function LandingPage() {
         </div>
 
         <p className="text-center text-sm text-green-500 mt-6">
-          Empowering Kerala farmers with modern technology
+          🌾 Empowering Kerala farmers with AI • 50,000+ farmers helped
         </p>
       </div>
     </div>
@@ -219,7 +388,8 @@ function OnboardingFlow() {
       current_stage: getRandomStage(),
       health_status: getRandomHealth(),
       last_activity: new Date(Date.now() - Math.random() * 7 * 24 * 60 * 60 * 1000).toISOString(),
-      planting_date: new Date(Date.now() - Math.random() * 180 * 24 * 60 * 60 * 1000).toISOString()
+      planting_date: new Date(Date.now() - Math.random() * 180 * 24 * 60 * 60 * 1000).toISOString(),
+      activities: [] // Initialize empty activities array
     }));
 
     setUser(userData);
@@ -458,40 +628,6 @@ function HomePage() {
   const navigate = useNavigate();
   const { user, crops } = useContext(AppContext);
   const [weather, setWeather] = useState(null);
-  const [loadingWeather, setLoadingWeather] = useState(false);
-
-  useEffect(() => {
-    const fetchWeather = async (lat, lon) => {
-      try {
-        setLoadingWeather(true);
-        const { data } = await axios.get(`${API}/weather/${lat}/${lon}`);
-        setWeather(data);
-      } catch (err) {
-        // silent fail; UI will show fallbacks
-      } finally {
-        setLoadingWeather(false);
-      }
-    };
-
-    // Prefer saved user coordinates
-    const coords = user?.location?.coordinates;
-    if (Array.isArray(coords) && coords.length === 2) {
-      const lon = coords[0];
-      const lat = coords[1];
-      fetchWeather(lat, lon);
-      return;
-    }
-
-    // Fallback to browser geolocation
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          fetchWeather(position.coords.latitude, position.coords.longitude);
-        },
-        () => {}
-      );
-    }
-  }, [user]);
 
   const getHealthColor = (status) => {
     switch (status) {
@@ -515,6 +651,14 @@ function HomePage() {
     }
   };
 
+  useEffect(() => {
+    const fetchWeather = async () => {
+      const weatherData = await getWeatherData(user?.location);
+      setWeather(weatherData);
+    };
+    fetchWeather();
+  }, [user]);
+
   if (!user) {
     return <Navigate to="/" />;
   }
@@ -535,12 +679,22 @@ function HomePage() {
               </div>
             </div>
             <div className="text-right">
-              <div className="text-2xl font-bold text-green-600">
-                {weather ? Math.round(weather.temperature) : "--"}°C
-              </div>
-              <div className="text-xs text-gray-500 capitalize">
-                {weather ? String(weather.weather || "").toLowerCase() : "fetching weather..."}
-              </div>
+              {weather?.error ? (
+                <div className="text-sm text-red-600">
+                  Error: {weather.message}
+                </div>
+              ) : weather ? (
+                <>
+                  <div className="text-2xl font-bold text-green-600">
+                    {weather.main?.temp}°C
+                  </div>
+                  <div className="text-xs text-gray-500 capitalize">
+                    {weather.weather?.[0]?.description}
+                  </div>
+                </>
+              ) : (
+                <div className="text-sm text-gray-500">Loading weather...</div>
+              )}
             </div>
           </div>
         </div>
@@ -548,20 +702,32 @@ function HomePage() {
 
       {/* Weather Card */}
       <div className="container mx-auto px-4 py-4 max-w-md">
-        <Card className="bg-gradient-to-r from-blue-500 to-blue-600 text-white border-0 shadow-lg">
+        <Card className={`${weather?.error ? 'bg-red-500' : 'bg-gradient-to-r from-blue-500 to-blue-600'} text-white border-0 shadow-lg`}>
           <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-3">
-                <Sun className="w-8 h-8" />
-                <div>
-                  <div className="text-sm opacity-90">Today's Weather</div>
-                  <div className="font-semibold">
-                    {weather ? Math.round(weather.temperature) : "--"}°C • {weather?.humidity ?? "--"}% humidity
+            {weather?.error ? (
+              <div className="text-center">
+                <AlertCircle className="w-8 h-8 mx-auto mb-2" />
+                <div className="text-sm font-semibold">Weather Service Error</div>
+                <div className="text-xs opacity-90">{weather.message}</div>
+              </div>
+            ) : weather ? (
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <Sun className="w-8 h-8" />
+                  <div>
+                    <div className="text-sm opacity-90">Today's Weather</div>
+                    <div className="font-semibold">
+                      {weather.main?.temp}°C • {weather.main?.humidity}% humidity
+                    </div>
                   </div>
                 </div>
+                <Droplets className="w-6 h-6 opacity-75" />
               </div>
-              <Droplets className="w-6 h-6 opacity-75" />
-            </div>
+            ) : (
+              <div className="text-center">
+                <div className="text-sm">Loading weather data...</div>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -658,6 +824,198 @@ function CropDetailPage() {
 
   const crop = crops.find(c => c.id === cropId);
 
+  const [type, setType] = useState("watering");
+  const [description, setDescription] = useState("");
+  const [quantity, setQuantity] = useState("");
+  const [notes, setNotes] = useState("");
+  const [selectedImage, setSelectedImage] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState(null);
+  const [imageUrl, setImageUrl] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleImageSelect = (event) => {
+    const file = event.target.files[0];
+    if (file && file.type.startsWith('image/')) {
+      setSelectedImage(file);
+      setPreviewUrl(URL.createObjectURL(file));
+    }
+  };
+
+  const uploadImageIfNeeded = async () => {
+    if (!selectedImage) return null;
+    const formData = new FormData();
+    formData.append('file', selectedImage);
+    const resp = await fetch(`${API}/upload-image`, { method: 'POST', body: formData });
+    if (!resp.ok) throw new Error('Image upload failed');
+    const data = await resp.json();
+    return data.image_url; // backend returns relative path like /uploads/...
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!description.trim()) {
+      toast.error('Please enter a description');
+      return;
+    }
+    setIsSubmitting(true);
+    try {
+      let uploadedUrl = imageUrl;
+      if (!uploadedUrl && selectedImage) {
+        uploadedUrl = await uploadImageIfNeeded();
+        setImageUrl(uploadedUrl);
+      }
+
+      const newActivity = {
+        id: Math.random().toString(36).slice(2),
+        type,
+        description: description.trim(),
+        date: new Date().toISOString(),
+        quantity: quantity || undefined,
+        notes: notes || undefined,
+        image_url: uploadedUrl || undefined
+      };
+
+      // Navigate back to crop detail with the new activity in state
+      navigate(`/crop/${cropId}`, { state: { newActivity } });
+      toast.success('Activity logged');
+    } catch (err) {
+      toast.error('Failed to save activity');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <div className="bg-white shadow-sm border-b">
+        <div className="container mx-auto px-4 py-4 max-w-md">
+          <div className="flex items-center space-x-4">
+            <Button variant="ghost" size="sm" onClick={() => navigate(`/crop/${cropId}`)}>
+              <ArrowLeft className="w-5 h-5" />
+            </Button>
+            <h1 className="text-xl font-bold text-green-800">Log Activity</h1>
+          </div>
+        </div>
+      </div>
+
+      <div className="container mx-auto px-4 py-4 max-w-md space-y-4">
+        {crop && (
+          <Card className="border-green-200">
+            <CardContent className="p-4">
+              <div className="flex items-center space-x-3">
+                <img src={crop.image_url} alt={crop.name} className="w-12 h-12 object-cover rounded" />
+                <div>
+                  <div className="font-semibold text-green-800">{crop.name}</div>
+                  <div className="text-xs text-gray-500">Add a new activity</div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        <Card className="border-green-200">
+          <CardContent className="p-4">
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <Label>Type</Label>
+                <Select value={type} onValueChange={setType}>
+                  <SelectTrigger className="mt-1">
+                    <SelectValue placeholder="Select activity type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="watering">Watering</SelectItem>
+                    <SelectItem value="fertilizer">Fertilizer</SelectItem>
+                    <SelectItem value="pesticide">Pesticide</SelectItem>
+                    <SelectItem value="harvesting">Harvesting</SelectItem>
+                    <SelectItem value="planting">Planting</SelectItem>
+                    <SelectItem value="observation">Observation</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label>Description</Label>
+                <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="What did you do?" className="mt-1" />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>Quantity (optional)</Label>
+                  <Input value={quantity} onChange={(e) => setQuantity(e.target.value)} placeholder="e.g., 500L, 2kg" className="mt-1" />
+                </div>
+                <div>
+                  <Label>Notes (optional)</Label>
+                  <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="extra details" className="mt-1" />
+                </div>
+              </div>
+
+              <div>
+                <Label>Photo (optional)</Label>
+                {!selectedImage ? (
+                  <div className="mt-2">
+                    <input id="activity-image" type="file" accept="image/*" onChange={handleImageSelect} className="hidden" />
+                    <Button asChild variant="outline">
+                      <label htmlFor="activity-image" className="cursor-pointer">Choose Image</label>
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="mt-2 space-y-2">
+                    <img src={previewUrl} alt="Preview" className="w-full h-40 object-cover rounded" />
+                    <div className="flex space-x-2">
+                      <Button type="button" variant="outline" onClick={() => { setSelectedImage(null); setPreviewUrl(null); setImageUrl(null); }}>Remove</Button>
+                      <Button type="button" variant="secondary" onClick={async () => { try { const url = await uploadImageIfNeeded(); setImageUrl(url); toast.success('Image uploaded'); } catch { toast.error('Upload failed'); } }}>Upload Image</Button>
+                    </div>
+                    {imageUrl && <div className="text-xs text-gray-500">Uploaded</div>}
+                  </div>
+                )}
+              </div>
+
+              <Button type="submit" className="w-full bg-green-600 hover:bg-green-700" disabled={isSubmitting}>
+                {isSubmitting ? 'Saving...' : 'Save Activity'}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+// Main App Component with Router
+function App() {
+  const [user, setUser] = useState(null);
+  const [crops, setCrops] = useState([]);
+
+  const contextValue = {
+    user,
+    setUser,
+    crops,
+    setCrops
+  };
+
+  return (
+    <AppContext.Provider value={contextValue}>
+      <div className="App font-inter">
+        <Toaster position="top-center" richColors />
+        <BrowserRouter>
+          <Routes>
+            <Route path="/" element={<LandingPage />} />
+            <Route path="/onboarding" element={<OnboardingFlow />} />
+            <Route path="/dashboard" element={<HomePage />} />
+            <Route path="/crop/:cropId" element={<CropDetailPage />} />
+            <Route path="/crop/:cropId/chat" element={<ChatInterface />} />
+            <Route path="/crop/:cropId/camera" element={<CameraPage />} />
+            <Route path="/crop/:cropId/add-activity" element={<AddActivityPage />} />
+            <Route path="*" element={<Navigate to="/" />} />
+          </Routes>
+        </BrowserRouter>
+      </div>
+    </AppContext.Provider>
+  );
+}
+
+export default App;c => c.id === cropId);
+
   // Local activities state synced from crop
   const [activities, setActivities] = useState(crop?.activities || []);
 
@@ -682,7 +1040,7 @@ function CropDetailPage() {
       // Update local activities
       setActivities(prev => [newActivity, ...prev]);
 
-      // Clear navigation state so it doesn’t repeat
+      // Clear navigation state so it doesn't repeat
       navigate(location.pathname, { replace: true });
     }
   }, [location.state, cropId, crops, setCrops, navigate, location.pathname]);
@@ -702,14 +1060,22 @@ function CropDetailPage() {
   const getAdvice = async () => {
     setLoadingAdvice(true);
     try {
-      const response = await fetch(`${API}/ai/advice/${crop.id}`, {
-        method: "POST",
+      // Use crop name instead of crop ID
+      const response = await fetch(`${API}/ai/advice/${encodeURIComponent(crop.name)}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
       });
-      if (!response.ok) throw new Error("Failed to get AI advice");
-      const data = await response.json();
-      setAiAdvice(data.advice || data.result || "No advice received");
+
+      if (response.ok) {
+        const data = await response.json();
+        setAiAdvice(data.advice);
+      } else {
+        throw new Error(`Backend API error: ${response.status} ${response.statusText}`);
+      }
     } catch (error) {
-      toast.error("Failed to get AI advice");
+      setAiAdvice(`Error getting AI advice: ${error.message}`);
     } finally {
       setLoadingAdvice(false);
     }
@@ -930,7 +1296,7 @@ function ChatInterface() {
   const startRecording = async () => {
     try {
       if (!navigator.mediaDevices || !window.MediaRecorder) {
-        toast.error("Recording not supported in this browser");
+        toast.error("Error: Recording not supported in this browser");
         return;
       }
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -943,17 +1309,17 @@ function ChatInterface() {
           const formData = new FormData();
           formData.append('file', blob, 'recording.webm');
           const res = await fetch(`${API}/ai/transcribe`, { method: 'POST', body: formData });
-          if (!res.ok) throw new Error('Transcription failed');
+          if (!res.ok) throw new Error(`Transcription API error: ${res.status} ${res.statusText}`);
           const { text } = await res.json();
           if (text) {
             setInputMessage(text);
             toast.success('Transcribed voice to text successfully');
           } else {
-            toast.error('No text returned from transcription');
+            toast.error('Error: No text returned from transcription service');
           }
         } catch (err) {
           console.error(err);
-          toast.error('Voice transcription error');
+          toast.error(`Error: ${err.message}`);
         } finally {
           stream.getTracks().forEach(t => t.stop());
         }
@@ -963,7 +1329,7 @@ function ChatInterface() {
       setIsRecording(true);
     } catch (err) {
       console.error(err);
-      toast.error('Microphone permission denied');
+      toast.error(`Error: ${err.message}`);
     }
   };
 
@@ -999,6 +1365,7 @@ function ChatInterface() {
         });
       }
 
+      // Use backend for chat to avoid CORS issues
       const response = await fetch(`${API}/ai/chat`, {
         method: 'POST',
         headers: {
@@ -1021,15 +1388,14 @@ function ChatInterface() {
         };
         setMessages(prev => [...prev, botResponse]);
       } else {
-        let errText = 'Failed to get response';
-        try { const e = await response.json(); errText = e.detail || e.error || JSON.stringify(e); } catch {}
-        throw new Error(errText);
+        throw new Error(`Chat API error: ${response.status} ${response.statusText}`);
       }
+
     } catch (error) {
       console.error('Chat error:', error);
       const botResponse = {
         id: (Date.now() + 1).toString(),
-        text: `Sorry, I'm having trouble connecting. ${error.message || ''}`.trim(),
+        text: `Error: ${error.message}`,
         isBot: true,
         timestamp: new Date()
       };
@@ -1228,22 +1594,23 @@ function CameraPage() {
       if (response.ok) {
         const result = await response.json();
         setCropIdentification(result.crop_identification);
-        
+
         // Update crop with new image
         if (crop) {
-          const updatedCrops = crops.map(c => 
+          const updatedCrops = crops.map(c =>
             c.id === cropId ? { ...c, image_url: result.image_url } : c
           );
           setCrops(updatedCrops);
         }
-        
+
         toast.success("Image uploaded successfully!");
       } else {
-        throw new Error('Upload failed');
+        throw new Error(`Upload API error: ${response.status} ${response.statusText}`);
       }
     } catch (error) {
       console.error('Upload error:', error);
-      toast.error("Failed to upload image. Please try again.");
+      setCropIdentification(`Error: ${error.message}`);
+      toast.error(`Error: ${error.message}`);
     } finally {
       setIsUploading(false);
     }
