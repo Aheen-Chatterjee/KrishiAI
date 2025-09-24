@@ -1,14 +1,113 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Malayalam:wght@300;400;500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-body {
+@layer base {
+  body {
     margin: 0;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto",
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto",
         "Oxygen", "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans",
         "Helvetica Neue", sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+    font-variation-settings: normal;
+  }
+
+  /* Enhanced readability for Malayalam text */
+  .malayalam {
+    font-family: 'Noto Sans Malayalam', sans-serif;
+    font-feature-settings: normal;
+  }
+
+  /* Better focus states for accessibility */
+  *:focus-visible {
+    outline: 3px solid theme('colors.kerala.500');
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+}
+
+@layer components {
+  /* Kerala-themed gradients for accessibility */
+  .gradient-kerala-primary {
+    background: linear-gradient(135deg, theme('colors.kerala.600') 0%, theme('colors.kerala.500') 100%);
+  }
+
+  .gradient-kerala-soft {
+    background: linear-gradient(135deg, theme('colors.kerala.100') 0%, theme('colors.kerala.50') 100%);
+  }
+
+  .gradient-earth {
+    background: linear-gradient(135deg, theme('colors.earth.500') 0%, theme('colors.earth.400') 100%);
+  }
+
+  .gradient-water {
+    background: linear-gradient(135deg, theme('colors.water.500') 0%, theme('colors.water.400') 100%);
+  }
+
+  /* Accessible button styles */
+  .btn-kerala-primary {
+    @apply bg-kerala-600 hover:bg-kerala-700 focus:bg-kerala-700 text-white font-medium;
+    @apply border-2 border-transparent focus:border-kerala-300;
+    @apply transition-all duration-200 ease-in-out;
+    @apply shadow-sm hover:shadow-md focus:shadow-lg;
+  }
+
+  .btn-kerala-secondary {
+    @apply bg-kerala-100 hover:bg-kerala-200 focus:bg-kerala-200 text-kerala-800 font-medium;
+    @apply border-2 border-kerala-300 focus:border-kerala-500;
+    @apply transition-all duration-200 ease-in-out;
+  }
+
+  /* Card styles with better contrast */
+  .card-kerala {
+    @apply bg-white border border-kerala-200 rounded-xl shadow-sm;
+    @apply hover:shadow-md transition-shadow duration-200;
+  }
+
+  .card-earth {
+    @apply bg-earth-50 border border-earth-200 rounded-xl;
+  }
+
+  .card-water {
+    @apply bg-water-50 border border-water-200 rounded-xl;
+  }
+
+  /* Text accessibility improvements */
+  .text-high-contrast {
+    @apply text-gray-900;
+    font-weight: 500;
+  }
+
+  .text-medium-contrast {
+    @apply text-gray-700;
+    font-weight: 400;
+  }
+
+  .text-readable {
+    line-height: 1.7;
+    letter-spacing: 0.025em;
+  }
+
+  /* Status indicators with better visibility */
+  .status-good {
+    @apply bg-kerala-500 text-white;
+    box-shadow: 0 0 0 3px theme('colors.kerala.100');
+  }
+
+  .status-warning {
+    @apply bg-earth-500 text-white;
+    box-shadow: 0 0 0 3px theme('colors.earth.100');
+  }
+
+  .status-critical {
+    @apply bg-red-500 text-white;
+    box-shadow: 0 0 0 3px theme('colors.red.100');
+  }
 }
 
 code {

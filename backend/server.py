@@ -110,6 +110,7 @@ class ChatMessage(BaseModel):
     message: str
     crop_id: Optional[str] = None
     image_base64: Optional[str] = None
+    word_limit: Optional[int] = 50
 
 # Helper Functions
 def prepare_for_mongo(data):
@@ -487,13 +488,14 @@ async def chat_with_ai(chat_data: ChatMessage):
             if crop:
                 crop_context = f"The farmer is asking about their {crop['name']} crop, planted on {crop.get('planting_date', 'unknown date')}, current stage: {crop.get('current_stage', 'unknown')}."
 
-        # Prepare message
-        message_text = f"{crop_context}\n\nFarmer's question: {chat_data.message}"
+        # Prepare message with word limit instruction
+        word_limit = chat_data.word_limit if chat_data.word_limit else 50
+        message_text = f"{crop_context}\n\nFarmer's question: {chat_data.message}\n\nIMPORTANT: Respond in exactly {word_limit} words or less. Speak directly to the farmer using 'you'. NO asterisks, bullet points, or special formatting."
 
         messages = [
             {
                 "role": "system",
-                "content": "You are FarmWise AI, an expert agricultural assistant for Kerala farmers. Provide helpful, practical advice in a friendly, conversational manner."
+                "content": f"You are FarmWise AI, an expert agricultural assistant for Kerala farmers. Always respond in {word_limit} words or less. Speak directly to farmers using 'you'. Provide concise, practical advice without asterisks, bullet points, or special formatting."
             }
         ]
 
@@ -522,11 +524,15 @@ async def chat_with_ai(chat_data: ChatMessage):
         response = await openai_client.chat.completions.create(
             model="gpt-4o",
             messages=messages,
-            max_tokens=800,
+            max_tokens=100,  # Reduced for concise responses
             temperature=0.7
         )
 
-        return {"response": response.choices[0].message.content}
+        # Clean up response - remove any asterisks or special formatting
+        response_text = response.choices[0].message.content
+        response_text = response_text.replace("*", "").replace("**", "").replace("#", "").strip()
+
+        return {"response": response_text}
 
     except Exception as e:
         logging.error(f"AI chat error: {e}")

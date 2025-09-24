@@ -19,16 +19,16 @@ import { Separator } from "./components/ui/separator";
 import { toast, Toaster } from "sonner";
 
 // Icons
-import { 
-  Leaf, 
-  Sun, 
-  Droplets, 
-  Camera, 
-  MessageCircle, 
+import {
+  Leaf,
+  Sun,
+  Droplets,
+  Camera,
+  MessageCircle,
   Mic,
-  Plus, 
-  Settings, 
-  MapPin, 
+  Plus,
+  Settings,
+  MapPin,
   Calendar,
   Activity,
   Sprout,
@@ -42,7 +42,8 @@ import {
   Home,
   Bot,
   Upload,
-  ArrowLeft
+  ArrowLeft,
+  Volume2
 } from "lucide-react";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || "http://localhost:8000";
@@ -133,19 +134,18 @@ const getAIAdvice = async (cropName, location, weatherData, activities = []) => 
       ? `Recent activities: ${activities.map(a => `${a.type} (${a.description})`).join(', ')}`
       : 'No recent activities logged';
 
-    const prompt = `As an agricultural expert for Kerala, India, provide specific advice for ${cropName} cultivation.
+    const prompt = `As an agricultural expert for Kerala, India, provide CONCISE advice for ${cropName} cultivation.
 
 Location: ${location.district || 'Kerala'}, ${location.taluk || ''}
 ${weatherContext}
 ${activityContext}
 
-Please provide:
-1. Current care recommendations for ${cropName}
-2. Weather-based advice for Kerala climate
-3. Common issues to watch for
-4. Best practices for this region
+Provide 2-3 direct, actionable sentences speaking DIRECTLY to the farmer using "you". Focus on:
+- Most urgent care YOU need to do now based on weather and activities
+- One specific action YOU should take this week
+- Brief warning about potential issues YOU should watch for
 
-Keep advice practical and focused on Kerala farming conditions.`;
+Keep response under 100 words, practical, focused on Kerala farming conditions, and speak directly to the farmer. NO asterisks, bullet points, or formatting.`;
 
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -165,7 +165,7 @@ Keep advice practical and focused on Kerala farming conditions.`;
             content: prompt
           }
         ],
-        max_tokens: 1000,
+        max_tokens: 150,
         temperature: 0.7
       })
     });
@@ -228,25 +228,29 @@ function LandingPage() {
   const [language, setLanguage] = useState("english");
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-50 via-white to-green-100">
+    <div className="min-h-screen gradient-kerala-soft">
       <div className="container mx-auto px-4 py-8 max-w-md">
         {/* Header */}
         <div className="text-center mb-8">
-          <div className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
+          <div className="w-20 h-20 gradient-kerala-primary rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
             <Leaf className="w-10 h-10 text-white" />
           </div>
-          <h1 className="text-3xl font-bold text-green-800 mb-2">KrishiAI</h1>
-          <p className="text-green-600 text-lg">Kerala's Intelligent Farming Assistant</p>
+          <h1 className="text-3xl font-bold font-inter text-kerala-800 mb-2 text-readable">KrishiAI</h1>
+          <p className="text-kerala-700 text-lg text-readable">Kerala's Intelligent Farming Assistant</p>
         </div>
 
         {/* Language Toggle */}
         <div className="flex justify-center mb-8">
-          <div className="bg-white rounded-full p-1 shadow-md">
+          <div className="bg-white rounded-full p-1 shadow-md border border-kerala-200">
             <Button
               variant={language === "malayalam" ? "default" : "ghost"}
               size="sm"
               onClick={() => setLanguage("malayalam")}
-              className="rounded-full"
+              className={`rounded-full font-malayalam text-base ${
+                language === "malayalam"
+                  ? "bg-kerala-600 hover:bg-kerala-700 text-white"
+                  : "text-kerala-700 hover:bg-kerala-50"
+              }`}
             >
               മലയാളം
             </Button>
@@ -254,7 +258,11 @@ function LandingPage() {
               variant={language === "english" ? "default" : "ghost"}
               size="sm"
               onClick={() => setLanguage("english")}
-              className="rounded-full"
+              className={`rounded-full font-inter text-base ${
+                language === "english"
+                  ? "bg-kerala-600 hover:bg-kerala-700 text-white"
+                  : "text-kerala-700 hover:bg-kerala-50"
+              }`}
             >
               English
             </Button>
@@ -263,38 +271,38 @@ function LandingPage() {
 
         {/* Features */}
         <div className="space-y-4 mb-8">
-          <Card className="border-green-200 shadow-sm">
+          <Card className="card-kerala">
             <CardContent className="p-4 flex items-center space-x-3">
-              <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
-                <Bot className="w-5 h-5 text-green-600" />
+              <div className="w-12 h-12 bg-kerala-100 rounded-full flex items-center justify-center">
+                <Bot className="w-6 h-6 text-kerala-600" />
               </div>
               <div>
-                <h3 className="font-semibold text-green-800">AI-Powered Advice</h3>
-                <p className="text-sm text-green-600">Get personalized farming recommendations</p>
+                <h3 className="font-semibold text-high-contrast text-readable">AI-Powered Advice</h3>
+                <p className="text-sm text-medium-contrast text-readable">Get personalized farming recommendations</p>
               </div>
             </CardContent>
           </Card>
 
-          <Card className="border-green-200 shadow-sm">
+          <Card className="card-water">
             <CardContent className="p-4 flex items-center space-x-3">
-              <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                <Camera className="w-5 h-5 text-blue-600" />
+              <div className="w-12 h-12 bg-water-100 rounded-full flex items-center justify-center">
+                <Camera className="w-6 h-6 text-water-600" />
               </div>
               <div>
-                <h3 className="font-semibold text-green-800">Crop Identification</h3>
-                <p className="text-sm text-green-600">Identify crops and diseases with AI</p>
+                <h3 className="font-semibold text-high-contrast text-readable">Crop Identification</h3>
+                <p className="text-sm text-medium-contrast text-readable">Identify crops and diseases with AI</p>
               </div>
             </CardContent>
           </Card>
 
-          <Card className="border-green-200 shadow-sm">
+          <Card className="card-earth">
             <CardContent className="p-4 flex items-center space-x-3">
-              <div className="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center">
-                <Sun className="w-5 h-5 text-orange-600" />
+              <div className="w-12 h-12 bg-earth-100 rounded-full flex items-center justify-center">
+                <Sun className="w-6 h-6 text-earth-600" />
               </div>
               <div>
-                <h3 className="font-semibold text-green-800">Weather Integration</h3>
-                <p className="text-sm text-green-600">Real-time weather for better planning</p>
+                <h3 className="font-semibold text-high-contrast text-readable">Weather Integration</h3>
+                <p className="text-sm text-medium-contrast text-readable">Real-time weather for better planning</p>
               </div>
             </CardContent>
           </Card>
@@ -302,17 +310,16 @@ function LandingPage() {
 
         {/* Action Buttons */}
         <div className="space-y-3">
-          <Button 
-            className="w-full h-12 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-xl"
+          <Button
+            className="btn-kerala-primary w-full h-14 rounded-xl text-lg"
             onClick={() => navigate('/onboarding')}
           >
             <User className="w-5 h-5 mr-2" />
             Continue as Guest
           </Button>
-          
-          <Button 
-            variant="outline" 
-            className="w-full h-12 border-green-600 text-green-600 hover:bg-green-50 font-semibold rounded-xl"
+
+          <Button
+            className="btn-kerala-secondary w-full h-14 rounded-xl text-lg"
             onClick={() => navigate('/onboarding')}
           >
             <Smartphone className="w-5 h-5 mr-2" />
@@ -320,7 +327,7 @@ function LandingPage() {
           </Button>
         </div>
 
-        <p className="text-center text-sm text-green-500 mt-6">
+        <p className="text-center text-base text-kerala-600 mt-6 text-readable">
           🌾 Empowering Kerala farmers with AI • 50,000+ farmers helped
         </p>
       </div>
@@ -424,16 +431,16 @@ function OnboardingFlow() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-50 to-white">
+    <div className="min-h-screen gradient-kerala-soft">
       <div className="container mx-auto px-4 py-8 max-w-md">
         {/* Progress */}
         <div className="flex justify-center mb-8">
-          <div className="flex space-x-2">
+          <div className="flex space-x-3">
             {[1, 2, 3].map((s) => (
               <div
                 key={s}
-                className={`w-3 h-3 rounded-full ${
-                  s <= step ? 'bg-green-600' : 'bg-green-200'
+                className={`w-4 h-4 rounded-full transition-all duration-300 ${
+                  s <= step ? 'bg-kerala-600 shadow-lg' : 'bg-kerala-200'
                 }`}
               />
             ))}
@@ -441,10 +448,10 @@ function OnboardingFlow() {
         </div>
 
         {step === 1 && (
-          <Card className="shadow-lg border-green-200">
+          <Card className="card-kerala shadow-lg">
             <CardHeader className="text-center">
-              <CardTitle className="text-green-800">Welcome to FarmAssist!</CardTitle>
-              <CardDescription>Let's set up your profile</CardDescription>
+              <CardTitle className="text-kerala-800 text-readable text-xl">Welcome to KrishiAI!</CardTitle>
+              <CardDescription className="text-medium-contrast text-readable">Let's set up your profile</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div>
@@ -666,14 +673,14 @@ function HomePage() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <div className="bg-white shadow-sm border-b">
+      <div className="bg-white shadow-sm border-b border-kerala-200">
         <div className="container mx-auto px-4 py-4 max-w-md">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-xl font-bold text-green-800">
+              <h1 className="text-xl font-bold text-kerala-800 text-readable">
                 Welcome, {user.name}!
               </h1>
-              <div className="flex items-center text-sm text-gray-600">
+              <div className="flex items-center text-sm text-medium-contrast">
                 <MapPin className="w-4 h-4 mr-1" />
                 {user.location.district}, {user.location.taluk}
               </div>
@@ -815,165 +822,343 @@ function HomePage() {
   );
 }
 
-// Crop Detail Component
+// Crop Detail Component with AI Recommendations
 function CropDetailPage() {
   const navigate = useNavigate();
   const { cropId } = useParams();
   const location = useLocation();
-  const { crops, setCrops } = useContext(AppContext);
+  const { crops, setCrops, user } = useContext(AppContext);
+
+  const [activities, setActivities] = useState([]);
+  const [aiAdvice, setAiAdvice] = useState("");
+  const [isLoadingAdvice, setIsLoadingAdvice] = useState(false);
+  const [weather, setWeather] = useState(null);
 
   const crop = crops.find(c => c.id === cropId);
 
-  const [type, setType] = useState("watering");
-  const [description, setDescription] = useState("");
-  const [quantity, setQuantity] = useState("");
-  const [notes, setNotes] = useState("");
-  const [selectedImage, setSelectedImage] = useState(null);
-  const [previewUrl, setPreviewUrl] = useState(null);
-  const [imageUrl, setImageUrl] = useState(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const handleImageSelect = (event) => {
-    const file = event.target.files[0];
-    if (file && file.type.startsWith('image/')) {
-      setSelectedImage(file);
-      setPreviewUrl(URL.createObjectURL(file));
+  // Handle new activity from location state
+  useEffect(() => {
+    if (location.state?.newActivity) {
+      setActivities(prev => [location.state.newActivity, ...prev]);
+      // Update crop's activities and last_activity
+      const updatedCrops = crops.map(c =>
+        c.id === cropId
+          ? {
+              ...c,
+              activities: [location.state.newActivity, ...(c.activities || [])],
+              last_activity: location.state.newActivity.date
+            }
+          : c
+      );
+      setCrops(updatedCrops);
+      // Clear the location state
+      navigate(`/crop/${cropId}`, { replace: true });
     }
-  };
+  }, [location.state, cropId, crops, setCrops, navigate]);
 
-  const uploadImageIfNeeded = async () => {
-    if (!selectedImage) return null;
-    const formData = new FormData();
-    formData.append('file', selectedImage);
-    const resp = await fetch(`${API}/upload-image`, { method: 'POST', body: formData });
-    if (!resp.ok) throw new Error('Image upload failed');
-    const data = await resp.json();
-    return data.image_url; // backend returns relative path like /uploads/...
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!description.trim()) {
-      toast.error('Please enter a description');
-      return;
+  // Initialize activities from crop data
+  useEffect(() => {
+    if (crop?.activities) {
+      setActivities(crop.activities);
     }
-    setIsSubmitting(true);
-    try {
-      let uploadedUrl = imageUrl;
-      if (!uploadedUrl && selectedImage) {
-        uploadedUrl = await uploadImageIfNeeded();
-        setImageUrl(uploadedUrl);
+  }, [crop]);
+
+  // Fetch weather and AI advice
+  useEffect(() => {
+    const fetchData = async () => {
+      if (!crop || !user) return;
+
+      try {
+        // Fetch weather data
+        const weatherData = await getWeatherData(user.location);
+        setWeather(weatherData);
+
+        // Fetch AI advice
+        setIsLoadingAdvice(true);
+        const advice = await getAIAdvice(crop.name, user.location, weatherData, activities);
+        setAiAdvice(advice);
+      } catch (error) {
+        console.error('Error fetching data:', error);
+        setAiAdvice(`Error loading AI advice: ${error.message}`);
+      } finally {
+        setIsLoadingAdvice(false);
       }
+    };
 
-      const newActivity = {
-        id: Math.random().toString(36).slice(2),
-        type,
-        description: description.trim(),
-        date: new Date().toISOString(),
-        quantity: quantity || undefined,
-        notes: notes || undefined,
-        image_url: uploadedUrl || undefined
-      };
+    fetchData();
+  }, [crop, user, activities]);
 
-      // Navigate back to crop detail with the new activity in state
-      navigate(`/crop/${cropId}`, { state: { newActivity } });
-      toast.success('Activity logged');
-    } catch (err) {
-      toast.error('Failed to save activity');
-    } finally {
-      setIsSubmitting(false);
+  const getHealthColor = (status) => {
+    switch (status) {
+      case 'good': return 'bg-green-500';
+      case 'warning': return 'bg-yellow-500';
+      case 'critical': return 'bg-red-500';
+      default: return 'bg-gray-500';
     }
   };
+
+  const getHealthIcon = (status) => {
+    switch (status) {
+      case 'good': return <CheckCircle className="w-5 h-5 text-green-600" />;
+      case 'warning': return <AlertCircle className="w-5 h-5 text-yellow-600" />;
+      case 'critical': return <AlertCircle className="w-5 h-5 text-red-600" />;
+      default: return <Activity className="w-5 h-5 text-gray-600" />;
+    }
+  };
+
+  const formatDate = (dateString) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffInHours = Math.floor((now - date) / (1000 * 60 * 60));
+
+    if (diffInHours < 24) {
+      return `${diffInHours}h ago`;
+    } else {
+      const diffInDays = Math.floor(diffInHours / 24);
+      return `${diffInDays}d ago`;
+    }
+  };
+
+  const formatPlantingDate = (dateString) => {
+    return new Date(dateString).toLocaleDateString('en-IN', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    });
+  };
+
+  if (!crop) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <Sprout className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+          <h2 className="text-xl font-semibold text-gray-600 mb-2">Crop not found</h2>
+          <Button onClick={() => navigate('/dashboard')} className="bg-green-600 hover:bg-green-700">
+            Back to Dashboard
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Header */}
       <div className="bg-white shadow-sm border-b">
         <div className="container mx-auto px-4 py-4 max-w-md">
-          <div className="flex items-center space-x-4">
-            <Button variant="ghost" size="sm" onClick={() => navigate(`/crop/${cropId}`)}>
-              <ArrowLeft className="w-5 h-5" />
-            </Button>
-            <h1 className="text-xl font-bold text-green-800">Log Activity</h1>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <Button variant="ghost" size="sm" onClick={() => navigate('/dashboard')}>
+                <ArrowLeft className="w-5 h-5" />
+              </Button>
+              <div>
+                <h1 className="text-xl font-bold text-green-800">{crop.name}</h1>
+                <div className="text-sm text-gray-500">Planted on {formatPlantingDate(crop.planting_date)}</div>
+              </div>
+            </div>
+            <div className="flex items-center space-x-1">
+              {getHealthIcon(crop.health_status)}
+              <span className="text-sm font-medium capitalize text-gray-700">{crop.health_status}</span>
+            </div>
           </div>
         </div>
       </div>
 
       <div className="container mx-auto px-4 py-4 max-w-md space-y-4">
-        {crop && (
-          <Card className="border-green-200">
-            <CardContent className="p-4">
-              <div className="flex items-center space-x-3">
-                <img src={crop.image_url} alt={crop.name} className="w-12 h-12 object-cover rounded" />
+        {/* Crop Image and Status */}
+        <Card className="border-green-200">
+          <CardContent className="p-0">
+            <div className="relative">
+              <img
+                src={crop.image_url}
+                alt={crop.name}
+                className="w-full h-48 object-cover rounded-t-lg"
+              />
+              <div className={`absolute top-3 right-3 w-4 h-4 rounded-full ${getHealthColor(crop.health_status)}`} />
+            </div>
+            <div className="p-4">
+              <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <div className="font-semibold text-green-800">{crop.name}</div>
-                  <div className="text-xs text-gray-500">Add a new activity</div>
+                  <div className="text-sm text-gray-500">Current Stage</div>
+                  <div className="font-semibold text-green-800 capitalize">{crop.current_stage}</div>
                 </div>
+                <div>
+                  <div className="text-sm text-gray-500">Last Activity</div>
+                  <div className="font-semibold text-gray-700">
+                    {crop.last_activity ? formatDate(crop.last_activity) : 'No activities yet'}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Weather Info */}
+        {weather && !weather.error && (
+          <Card className="bg-gradient-to-r from-blue-500 to-blue-600 text-white border-0">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <Sun className="w-8 h-8" />
+                  <div>
+                    <div className="text-sm opacity-90">Current Weather</div>
+                    <div className="font-semibold">
+                      {weather.main?.temp}°C • {weather.main?.humidity}% humidity
+                    </div>
+                    <div className="text-sm opacity-90 capitalize">{weather.weather?.[0]?.description}</div>
+                  </div>
+                </div>
+                <Droplets className="w-6 h-6 opacity-75" />
               </div>
             </CardContent>
           </Card>
         )}
 
-        <Card className="border-green-200">
-          <CardContent className="p-4">
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <Label>Type</Label>
-                <Select value={type} onValueChange={setType}>
-                  <SelectTrigger className="mt-1">
-                    <SelectValue placeholder="Select activity type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="watering">Watering</SelectItem>
-                    <SelectItem value="fertilizer">Fertilizer</SelectItem>
-                    <SelectItem value="pesticide">Pesticide</SelectItem>
-                    <SelectItem value="harvesting">Harvesting</SelectItem>
-                    <SelectItem value="planting">Planting</SelectItem>
-                    <SelectItem value="observation">Observation</SelectItem>
-                  </SelectContent>
-                </Select>
+        {/* AI Recommendations */}
+        <Card className="card-kerala bg-kerala-50">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center justify-between text-kerala-800">
+              <div className="flex items-center space-x-2">
+                <Bot className="w-5 h-5" />
+                <span className="text-readable">AI Recommendations</span>
               </div>
-
-              <div>
-                <Label>Description</Label>
-                <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="What did you do?" className="mt-1" />
+              {aiAdvice && !isLoadingAdvice && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => {
+                    if ('speechSynthesis' in window) {
+                      const utterance = new SpeechSynthesisUtterance(aiAdvice);
+                      utterance.lang = 'en-IN';
+                      utterance.rate = 0.9;
+                      window.speechSynthesis.speak(utterance);
+                      toast.success('Playing audio');
+                    } else {
+                      toast.error('Text-to-speech not supported');
+                    }
+                  }}
+                  className="text-kerala-600 hover:text-kerala-700 hover:bg-kerala-100"
+                >
+                  <Volume2 className="w-4 h-4" />
+                </Button>
+              )}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0">
+            {isLoadingAdvice ? (
+              <div className="flex items-center space-x-2">
+                <div className="loading-spinner w-4 h-4 border-kerala-200 border-t-kerala-600"></div>
+                <span className="text-kerala-600 text-readable">Generating personalized advice...</span>
               </div>
+            ) : aiAdvice ? (
+              <div className="text-sm text-high-contrast whitespace-pre-wrap text-readable">{aiAdvice}</div>
+            ) : (
+              <div className="text-sm text-medium-contrast text-readable">No recommendations available at the moment.</div>
+            )}
+          </CardContent>
+        </Card>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label>Quantity (optional)</Label>
-                  <Input value={quantity} onChange={(e) => setQuantity(e.target.value)} placeholder="e.g., 500L, 2kg" className="mt-1" />
-                </div>
-                <div>
-                  <Label>Notes (optional)</Label>
-                  <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="extra details" className="mt-1" />
-                </div>
+        {/* Quick Actions */}
+        <Card className="card-kerala">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-kerala-800 text-readable">Quick Actions</CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <div className="grid grid-cols-2 gap-3">
+              <Button
+                onClick={() => navigate(`/crop/${cropId}/chat`)}
+                className="bg-kerala-600 hover:bg-kerala-700 text-white h-12 flex items-center justify-center"
+              >
+                <MessageCircle className="w-4 h-4 mr-2" />
+                <span className="text-sm">Ask AI</span>
+              </Button>
+              <Button
+                onClick={() => navigate(`/crop/${cropId}/camera`)}
+                className="bg-kerala-100 hover:bg-kerala-200 text-kerala-800 border-kerala-300 h-12 flex items-center justify-center"
+              >
+                <Camera className="w-4 h-4 mr-2" />
+                <span className="text-sm">Update Photo</span>
+              </Button>
+              <Button
+                onClick={() => navigate(`/crop/${cropId}/add-activity`)}
+                className="bg-kerala-100 hover:bg-kerala-200 text-kerala-800 border-kerala-300 h-12 flex items-center justify-center"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                <span className="text-sm">Log Activity</span>
+              </Button>
+              <Button
+                className="bg-kerala-100 hover:bg-kerala-200 text-kerala-800 border-kerala-300 h-12 flex items-center justify-center"
+                onClick={() => toast.info('Settings coming soon!')}
+              >
+                <Settings className="w-4 h-4 mr-2" />
+                <span className="text-sm">Settings</span>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Recent Activities */}
+        <Card className="card-kerala">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-kerala-800 text-readable">Recent Activities</CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0">
+            {activities.length === 0 ? (
+              <div className="text-center py-6">
+                <Activity className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+                <div className="text-sm text-gray-500 mb-3">No activities logged yet</div>
+                <Button
+                  size="sm"
+                  onClick={() => navigate(`/crop/${cropId}/add-activity`)}
+                  className="bg-green-600 hover:bg-green-700"
+                >
+                  <Plus className="w-4 h-4 mr-1" />
+                  Log First Activity
+                </Button>
               </div>
-
-              <div>
-                <Label>Photo (optional)</Label>
-                {!selectedImage ? (
-                  <div className="mt-2">
-                    <input id="activity-image" type="file" accept="image/*" onChange={handleImageSelect} className="hidden" />
-                    <Button asChild variant="outline">
-                      <label htmlFor="activity-image" className="cursor-pointer">Choose Image</label>
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="mt-2 space-y-2">
-                    <img src={previewUrl} alt="Preview" className="w-full h-40 object-cover rounded" />
-                    <div className="flex space-x-2">
-                      <Button type="button" variant="outline" onClick={() => { setSelectedImage(null); setPreviewUrl(null); setImageUrl(null); }}>Remove</Button>
-                      <Button type="button" variant="secondary" onClick={async () => { try { const url = await uploadImageIfNeeded(); setImageUrl(url); toast.success('Image uploaded'); } catch { toast.error('Upload failed'); } }}>Upload Image</Button>
+            ) : (
+              <div className="space-y-3">
+                {activities.slice(0, 5).map((activity) => (
+                  <div key={activity.id} className="flex items-start space-x-3 pb-3 border-b border-gray-100 last:border-0">
+                    <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <Activity className="w-4 h-4 text-green-600" />
                     </div>
-                    {imageUrl && <div className="text-xs text-gray-500">Uploaded</div>}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between">
+                        <div className="font-medium text-gray-900 capitalize">{activity.type}</div>
+                        <div className="text-xs text-gray-500">{formatDate(activity.date)}</div>
+                      </div>
+                      <div className="text-sm text-gray-600 mt-1">{activity.description}</div>
+                      {activity.quantity && (
+                        <div className="text-xs text-gray-500 mt-1">Quantity: {activity.quantity}</div>
+                      )}
+                      {activity.notes && (
+                        <div className="text-xs text-gray-500 mt-1">Notes: {activity.notes}</div>
+                      )}
+                      {activity.image_url && (
+                        <div className="mt-2">
+                          <img
+                            src={activity.image_url}
+                            alt="Activity"
+                            className="w-16 h-16 object-cover rounded"
+                          />
+                        </div>
+                      )}
+                    </div>
                   </div>
+                ))}
+                {activities.length > 5 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="w-full text-green-600 hover:text-green-700 hover:bg-green-50"
+                    onClick={() => toast.info('Full activity history coming soon!')}
+                  >
+                    View All Activities ({activities.length})
+                  </Button>
                 )}
               </div>
-
-              <Button type="submit" className="w-full bg-green-600 hover:bg-green-700" disabled={isSubmitting}>
-                {isSubmitting ? 'Saving...' : 'Save Activity'}
-              </Button>
-            </form>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -1106,7 +1291,8 @@ function ChatInterface() {
         body: JSON.stringify({
           message: inputMessage,
           crop_id: cropId,
-          image_base64: imageBase64
+          image_base64: imageBase64,
+          word_limit: 50
         }),
       });
 
@@ -1187,7 +1373,28 @@ function ChatInterface() {
                     />
                   </div>
                 )}
-                <div className="text-sm">{message.text}</div>
+                <div className="flex items-start justify-between">
+                  <div className="text-sm flex-1">{message.text}</div>
+                  {message.isBot && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => {
+                        if ('speechSynthesis' in window) {
+                          const utterance = new SpeechSynthesisUtterance(message.text);
+                          utterance.lang = 'en-IN';
+                          utterance.rate = 0.9;
+                          window.speechSynthesis.speak(utterance);
+                        } else {
+                          toast.error('Text-to-speech not supported');
+                        }
+                      }}
+                      className="ml-2 p-1 h-6 w-6"
+                    >
+                      <Volume2 className="w-3 h-3" />
+                    </Button>
+                  )}
+                </div>
                 <div
                   className={`text-xs mt-1 ${
                     message.isBot ? 'text-gray-500' : 'text-green-100'
